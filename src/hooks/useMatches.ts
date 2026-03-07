@@ -11,7 +11,7 @@ export function useMatches() {
   const { squadMembers } = useUser();
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   useEffect(() => {
     if (userProfile) {
       loadUserMatches();
@@ -22,29 +22,29 @@ export function useMatches() {
 
   const loadUserMatches = async () => {
     if (!userProfile) return;
-    
+
     try {
       setLoading(true);
-      
+
       // Get tournament registrations for the user
       const registrationsQuery = query(
         collection(db, "tournament_registrations"),
         where("userId", "==", userProfile.uid)
       );
-      
+
       const registrationsSnapshot = await getDocs(registrationsQuery);
       const tournamentIds = registrationsSnapshot.docs.map(doc => doc.data().tournamentId);
-      
+
       if (tournamentIds.length === 0) {
         setMatches([]);
         setLoading(false);
         return;
       }
-      
+
       // Get tournaments for these IDs
       const tournamentsQuery = query(collection(db, "tournaments"));
       const tournamentsSnapshot = await getDocs(tournamentsQuery);
-      
+
       // Get match results for the user
       const resultsQuery = query(
         collection(db, "match_results"),
@@ -52,20 +52,20 @@ export function useMatches() {
       );
       const resultsSnapshot = await getDocs(resultsQuery);
       const userResults = new Map<string, MatchResult>();
-      
+
       resultsSnapshot.docs.forEach(doc => {
         const result = doc.data() as MatchResult;
         userResults.set(result.tournamentId, { ...result, id: doc.id });
       });
-      
+
       const userMatches: Match[] = [];
-      
+
       tournamentsSnapshot.docs.forEach(doc => {
         const tournamentData = doc.data();
         if (tournamentIds.includes(doc.id)) {
           // Get result data for this tournament
           const matchResult = userResults.get(doc.id);
-          
+
           // Convert tournament to match format
           const match: Match = {
             id: doc.id, // Use string ID as per interface
@@ -92,9 +92,9 @@ export function useMatches() {
               roomId: `NETWIN${doc.id.slice(-6).toUpperCase()}`,
               password: `NW${Date.now().toString().slice(-4)}`
             } : undefined,
-            roomId: tournamentData.status === "ongoing" || tournamentData.status === "scheduled" ? 
+            roomId: tournamentData.status === "ongoing" || tournamentData.status === "scheduled" ?
               `NETWIN${doc.id.slice(-6).toUpperCase()}` : undefined,
-            roomPassword: tournamentData.status === "ongoing" || tournamentData.status === "scheduled" ? 
+            roomPassword: tournamentData.status === "ongoing" || tournamentData.status === "scheduled" ?
               `NW${Date.now().toString().slice(-4)}` : undefined,
             resultSubmitted: !!matchResult,
             resultApproved: false, // matchResult?.status === "verified",
@@ -103,14 +103,14 @@ export function useMatches() {
             kills: matchResult?.kills,
             results: []
           };
-          
+
           userMatches.push(match);
         }
       });
-      
+
       // Sort by date
       userMatches.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      
+
       setMatches(userMatches);
     } catch (error) {
       console.error("Error loading user matches:", error);
@@ -136,28 +136,28 @@ export function useMatches() {
         return "scheduled";
     }
   };
-  
+
   const getUpcomingMatches = () => {
-    return matches.filter(match => 
+    return matches.filter(match =>
       match.status === "scheduled" || match.status === "ongoing"
-    ).sort((a, b) => 
+    ).sort((a, b) =>
       new Date(a.date).getTime() - new Date(b.date).getTime()
     );
   };
-  
+
   const getCompletedMatches = () => {
-    return matches.filter(match => 
+    return matches.filter(match =>
       match.status === "completed"
-    ).sort((a, b) => 
+    ).sort((a, b) =>
       new Date(b.date).getTime() - new Date(a.date).getTime()
     );
   };
-    const uploadMatchResult = async (matchId: string, screenshot: string, kills?: number, placement?: number): Promise<boolean> => {
+  const uploadMatchResult = async (matchId: string, screenshot: string, kills?: number, placement?: number): Promise<boolean> => {
     if (!userProfile) {
       console.error('[useMatches] No userProfile available');
       return false;
     }
-    
+
     try {
       // Note: We don't need to find the match in the matches array anymore since we're working with tournament registrations
       // If screenshot is base64, upload it to Firebase Storage
@@ -168,19 +168,20 @@ export function useMatches() {
           matchId,
           screenshot
         );
-        
+
         if (!uploadResult.success) {
           console.error('[useMatches] Failed to upload screenshot:', uploadResult.error);
           return false;
         }
-        
+
         screenshotURL = uploadResult.downloadURL!;
-        }
+      }
 
       // Submit result to user_matches and tournament_registrations collections
       const submitResult = await ScreenshotService.submitMatchResult(
         matchId,
         screenshotURL,
+        userProfile.uid,
         kills,
         placement
       );
@@ -189,7 +190,7 @@ export function useMatches() {
         console.error('[useMatches] Failed to submit match result:', submitResult.error);
         return false;
       }
-      
+
       // Success! The ScreenshotService has handled updating both user_matches and tournament_registrations
       // The TournamentContext will refresh the data automatically
       return true;
@@ -198,7 +199,7 @@ export function useMatches() {
       return false;
     }
   };
-  
+
   return {
     matches,
     loading,

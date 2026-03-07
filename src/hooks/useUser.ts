@@ -3,12 +3,12 @@ import { KycDocument, UserProfile, SquadMember } from "@/types";
 import { useAuth } from "./useAuth";
 import { getRequiredKycDocuments } from "@/utils/helpers";
 import { useFirebase } from "@/contexts/FirebaseContext";
-import { 
-  collection, 
-  addDoc, 
-  deleteDoc, 
-  getDocs, 
-  query, 
+import {
+  collection,
+  addDoc,
+  deleteDoc,
+  getDocs,
+  query,
   where,
   onSnapshot
 } from "firebase/firestore";
@@ -21,17 +21,17 @@ export function useUser() {
   const [kycDocuments, setKycDocuments] = useState<KycDocument[]>([]);
   const [squadMembers, setSquadMembers] = useState<SquadMember[]>([]);
   const [loading, setLoading] = useState(true);
-    useEffect(() => {
+  useEffect(() => {
     let unsubscribeKyc: (() => void) | undefined;
-    
+
     const loadData = async () => {
       if (userProfile) {
         try {
           setLoading(true);
-          
+
           // Load KYC documents with real-time listener
           unsubscribeKyc = await loadKycDocuments();
-          
+
           // Load squad members from Firestore
           await loadSquadMembers();
         } catch (error) {
@@ -47,35 +47,38 @@ export function useUser() {
         setLoading(false);
       }
     };
-    
+
     loadData();
-    
+
     // Cleanup function
     return () => {
       if (unsubscribeKyc) {
         unsubscribeKyc();
-      }    };
+      }
+    };
   }, [user, userProfile]);
 
   const loadKycDocuments = async () => {
     if (!userProfile) return;
-    
+
     try {
       const kycQuery = query(
-        collection(db, "kyc_documents"), 
+        collection(db, "kyc_documents"),
         where("userId", "==", userProfile.uid)
       );
-      
+
+      console.log("[useUser] Setting up KYC listener for UID:", userProfile.uid);
       // Set up real-time listener for KYC documents
       const unsubscribe = onSnapshot(kycQuery, (snapshot) => {
+        console.log("[useUser] KYC snapshot received, docs count:", snapshot.size);
         const docs = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
           createdAt: doc.data().createdAt?.toDate?.() || doc.data().createdAt
         })) as KycDocument[];
         setKycDocuments(docs);
-        
-        }, (error) => {
+
+      }, (error) => {
         console.warn("Error listening to KYC documents:", error);
         // Fallback to localStorage
         const storedKycStr = localStorage.getItem('netwin_kyc');
@@ -89,7 +92,7 @@ export function useUser() {
           }
         }
       });
-      
+
       // Return unsubscribe function to clean up listener
       return unsubscribe;
     } catch (error) {
@@ -109,10 +112,10 @@ export function useUser() {
   };
   const loadSquadMembers = async () => {
     if (!userProfile) return;
-    
+
     try {
       const squadQuery = query(
-        collection(db, "squad_members"), 
+        collection(db, "squad_members"),
         where("ownerId", "==", userProfile.uid)
       );
       const squadSnapshot = await getDocs(squadQuery);
@@ -144,10 +147,10 @@ export function useUser() {
 
   const loadLocalData = () => {
     if (!userProfile) return;
-    
+
     // Get KYC documents from localStorage (if any)
     const storedKycStr = localStorage.getItem('netwin_kyc');
-    
+
     if (storedKycStr) {
       try {
         const allKycDocs = JSON.parse(storedKycStr) as Record<string, KycDocument[]>;
@@ -157,7 +160,7 @@ export function useUser() {
         setKycDocuments([]);
       }
     }
-    
+
     // Get squad members from localStorage
     const storedSquad = localStorage.getItem(`squad_${userProfile.uid}`);
     if (storedSquad) {
@@ -169,7 +172,7 @@ export function useUser() {
       }
     }
   };
-  
+
   const updateProfile = async (data: Partial<UserProfile>) => {
     if (userProfile && updateUserProfile) {
       try {
@@ -182,10 +185,11 @@ export function useUser() {
     }
     return false;
   };
-  
+
   const submitKycDocument = async (document: Omit<KycDocument, "id" | "userId" | "status" | "createdAt" | "updatedAt"> & { frontImageFile?: string, backImageFile?: string, selfieFile?: string }) => {
     if (!userProfile) return false;
-    
+
+    console.log("[useUser] Starting submitKycDocument...");
     try {
       // Upload images to Firebase Storage if provided
       let frontImageUrl = document.frontImageUrl || '';
@@ -206,7 +210,7 @@ export function useUser() {
         await uploadString(selfieRef, document.selfieFile, 'data_url');
         selfieUrl = await getDownloadURL(selfieRef);
       }
-        // Save to Firestore (exclude file fields)
+      // Save to Firestore (exclude file fields)
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { frontImageFile: _front, backImageFile: _back, selfieFile: _selfie, ...documentData } = document;
       const newDoc = {
@@ -219,27 +223,27 @@ export function useUser() {
         createdAt: new Date(),
         updatedAt: new Date()
       };
-      
+
       const docRef = await addDoc(collection(db, "kyc_documents"), newDoc);
       const savedDoc = { ...newDoc, id: docRef.id };
-      
+
       // Update user KYC status if it was not submitted before or was rejected
       if (userProfile.kycStatus === "NOT_SUBMITTED" || userProfile.kycStatus === "REJECTED") {
         await updateProfile({ kycStatus: "PENDING" });
-        
+
         // Ensure UI gets updated profile with new KYC status
         await refreshUserProfile();
-        
+
         // Log current KYC status after refresh
-        }
-      
+      }
+
       // Update state
       setKycDocuments(prev => [...prev, savedDoc]);
-      
+
       return true;
     } catch (error) {
       console.warn("Could not save KYC document to Firestore, using localStorage:", error);
-      
+
       // Fallback to localStorage
       const newDoc: KycDocument = {
         ...document,
@@ -249,10 +253,10 @@ export function useUser() {
         createdAt: new Date(),
         updatedAt: new Date()
       };
-      
+
       const storedKycStr = localStorage.getItem('netwin_kyc');
       let allKycDocs: Record<string, KycDocument[]> = {};
-      
+
       if (storedKycStr) {
         try {
           allKycDocs = JSON.parse(storedKycStr);
@@ -260,39 +264,39 @@ export function useUser() {
           console.error("Failed to parse KYC documents", error);
         }
       }
-      
+
       const userDocs = allKycDocs[userProfile.uid] || [];
       userDocs.push(newDoc);
       allKycDocs[userProfile.uid] = userDocs;
-      
+
       localStorage.setItem('netwin_kyc', JSON.stringify(allKycDocs));
-      
+
       // Update user KYC status if it was not submitted before or was rejected
       if (userProfile.kycStatus === "NOT_SUBMITTED" || userProfile.kycStatus === "REJECTED") {
         console.log("[submitKycDocument] Updating KYC status to PENDING (localStorage fallback)");
         await updateProfile({ kycStatus: "PENDING" });
-        
+
         // Ensure UI gets updated profile with new KYC status
         await refreshUserProfile();
       }
-      
+
       // Update state
       setKycDocuments(prev => [...prev, newDoc]);
-      
+
       return true;
     }
   };
-  
+
   const getKycStatus = () => {
     if (!userProfile) return "not_submitted";
     return userProfile.kycStatus;
   };
-  
+
   const getRequiredDocuments = () => {
     if (!userProfile) return [];
     return getRequiredKycDocuments(userProfile.country);
   };
-  
+
   // Update game ID
   const updateGameId = async (gameId: string) => {
     if (userProfile) {
@@ -300,11 +304,11 @@ export function useUser() {
     }
     return false;
   };
-  
+
   // Upload profile image
   const uploadProfileImage = async (imageData: string) => {
     if (!userProfile) return false;
-    
+
     try {
       // Update user profile with new image
       await updateProfile({ photoURL: imageData });
@@ -314,14 +318,14 @@ export function useUser() {
       return false;
     }
   };
-    const getSquadMembers = () => {
+  const getSquadMembers = () => {
     return squadMembers;
-  };  const addSquadMember = async (username: string, gameId: string) => {
+  }; const addSquadMember = async (username: string, gameId: string) => {
     if (!userProfile) {
       console.error('No user profile available for adding squad member');
       return false;
     }
-    
+
     try {
       const memberId = Date.now();
       const newMember: SquadMember = {
@@ -331,7 +335,7 @@ export function useUser() {
         profilePicture: `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random`,
         isOwner: false
       };
-      
+
       // Try to save to Firestore first
       try {
         const docRef = await addDoc(collection(db, "squad_members"), {
@@ -347,7 +351,7 @@ export function useUser() {
         return true;
       } catch (firestoreError) {
         console.warn("Could not save squad member to Firestore, using localStorage:", firestoreError);
-        
+
         // Fallback to localStorage
         const currentSquad = getSquadMembers();
         const updatedSquad = [...currentSquad, newMember];
@@ -362,29 +366,29 @@ export function useUser() {
   };
   const removeSquadMember = async (memberId: number) => {
     if (!userProfile) return false;
-    
+
     try {
       // Try to remove from Firestore first
       try {
         // Find the document with the matching id and ownerId
         const squadQuery = query(
-          collection(db, "squad_members"), 
+          collection(db, "squad_members"),
           where("ownerId", "==", userProfile.uid),
           where("id", "==", memberId)
         );
         const squadSnapshot = await getDocs(squadQuery);
-        
+
         if (!squadSnapshot.empty) {
           // Delete the first matching document
           await deleteDoc(squadSnapshot.docs[0].ref);
         }
-        
+
         // Update local state
         setSquadMembers(prev => prev.filter(member => member.id !== memberId));
         return true;
       } catch (firestoreError) {
         console.warn("Could not remove squad member from Firestore, using localStorage:", firestoreError);
-        
+
         // Fallback to localStorage
         const currentSquad = getSquadMembers();
         const updatedSquad = currentSquad.filter((member: SquadMember) => member.id !== memberId);

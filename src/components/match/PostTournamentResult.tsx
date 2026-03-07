@@ -1,13 +1,15 @@
 import React, { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload, Camera, Trophy, Loader2 } from "lucide-react";
+import { Upload, Camera, Trophy, Loader2, Sparkles, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import ScreenshotUploadSimple from "./ScreenshotUploadSimple";
+import { GeminiService, ScreenshotAnalysisResult } from "@/lib/geminiService";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface PostTournamentResultProps {
   tournamentTitle: string;
@@ -25,6 +27,8 @@ export default function PostTournamentResult({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [screenshot, setScreenshot] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<ScreenshotAnalysisResult | null>(null);
   const [resultData, setResultData] = useState({
     kills: 0,
     position: 1,
@@ -32,8 +36,40 @@ export default function PostTournamentResult({
   const { toast } = useToast();
   const { userProfile } = useAuth();
 
-  const handleScreenshotUpload = (screenshotUrl: string) => {
+  const handleScreenshotUpload = async (screenshotUrl: string) => {
     setScreenshot(screenshotUrl);
+    setAiAnalysis(null);
+
+    // Trigger AI Analysis
+    setIsAnalyzing(true);
+    try {
+      const analysis = await GeminiService.analyzeScreenshot(screenshotUrl);
+      setAiAnalysis(analysis);
+
+      if (analysis.success) {
+        setResultData({
+          kills: analysis.kills,
+          position: analysis.position > 0 ? analysis.position : resultData.position
+        });
+
+        if (!analysis.isAuthentic) {
+          toast({
+            title: "Verification Warning",
+            description: "AI detected potential tampering or an invalid screenshot. Please ensure you upload the original game result.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "AI Analysis Complete",
+            description: `Detected ${analysis.kills} kills and #${analysis.position} position.`,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("AI Analysis failed:", error);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -119,7 +155,7 @@ export default function PostTournamentResult({
               <p className="text-sm text-gray-300 mb-4">
                 Upload a screenshot of your final result to receive your rewards
               </p>
-              
+
               <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
@@ -133,8 +169,11 @@ export default function PostTournamentResult({
                       <Trophy className="h-5 w-5" />
                       Submit Tournament Result
                     </DialogTitle>
+                    <div className="text-sm text-gray-400 mt-1">
+                      Provide your match result details and upload a screenshot for verification.
+                    </div>
                   </DialogHeader>
-                  
+
                   <div className="space-y-4">
                     <div className="text-sm text-gray-300 bg-gray-800 p-3 rounded-lg">
                       <div className="font-medium mb-1">Tournament: {tournamentTitle}</div>
@@ -145,16 +184,42 @@ export default function PostTournamentResult({
 
                     <div>
                       <Label className="text-sm font-medium">Result Screenshot</Label>
-                      <ScreenshotUploadSimple 
+                      <ScreenshotUploadSimple
                         onUpload={handleScreenshotUpload}
                         preview={screenshot}
                       />
                     </div>
 
+                    {isAnalyzing && (
+                      <div className="flex items-center justify-center p-4 bg-purple-900/10 border border-purple-500/30 rounded-lg animate-pulse">
+                        <Sparkles className="h-5 w-5 text-purple-400 mr-2 animate-spin" />
+                        <span className="text-purple-400 text-sm font-medium">AI is analyzing screenshot...</span>
+                      </div>
+                    )}
+
+                    {aiAnalysis && aiAnalysis.success && (
+                      <Alert variant={aiAnalysis.isAuthentic ? "default" : "destructive"} className={aiAnalysis.isAuthentic ? "bg-green-900/10 border-green-500/30" : ""}>
+                        {aiAnalysis.isAuthentic ? (
+                          <CheckCircle2 className="h-4 w-4 text-green-400" />
+                        ) : (
+                          <AlertCircle className="h-4 w-4" />
+                        )}
+                        <AlertTitle>{aiAnalysis.isAuthentic ? "AI Verified" : "Verification Failed"}</AlertTitle>
+                        <AlertDescription className="text-xs">
+                          {aiAnalysis.reasoning || (aiAnalysis.isAuthentic
+                            ? "Screenshot appears authentic. Data extracted automatically."
+                            : "This screenshot might be edited or invalid.")}
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label htmlFor="kills" className="text-sm font-medium">
+                        <Label htmlFor="kills" className="text-sm font-medium flex items-center gap-1">
                           Total Kills
+                          {aiAnalysis?.success && aiAnalysis.isAuthentic && (
+                            <Sparkles className="h-3 w-3 text-purple-400" title="Detected by AI" />
+                          )}
                         </Label>
                         <Input
                           id="kills"
@@ -170,8 +235,11 @@ export default function PostTournamentResult({
                         />
                       </div>
                       <div>
-                        <Label htmlFor="position" className="text-sm font-medium">
+                        <Label htmlFor="position" className="text-sm font-medium flex items-center gap-1">
                           Final Position
+                          {aiAnalysis?.success && aiAnalysis.isAuthentic && (
+                            <Sparkles className="h-3 w-3 text-purple-400" title="Detected by AI" />
+                          )}
                         </Label>
                         <Input
                           id="position"

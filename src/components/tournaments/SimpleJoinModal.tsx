@@ -16,7 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { AlertTriangle, Users, Trophy, DollarSign, Edit, Check, X } from 'lucide-react';
+import { AlertTriangle, Users, Trophy, DollarSign } from 'lucide-react';
 import type { Currency } from '../../types';
 
 interface SimpleJoinModalProps {
@@ -35,36 +35,54 @@ export default function SimpleJoinModal({
   const { joinTournament } = useTournaments();
   const { toast } = useToast();
   const [isJoining, setIsJoining] = useState(false);
-  const [teammates, setTeammates] = useState<string[]>([]);
-  const [selectedSquadMembers, setSelectedSquadMembers] = useState<string[]>([]);
-  const [showGameIdDialog, setShowGameIdDialog] = useState(false);
-  const [currentGameId, setCurrentGameId] = useState<string>("");
-  const [isEditingGameId, setIsEditingGameId] = useState(false);
-  
-  // Force single participant registration for all tournaments
-  const maxSquadSize = 1;
-  
+
+
+  // Dynamic squad size based on tournament match type
+  const getSquadSize = (type: string) => {
+    const t = type.toLowerCase();
+    if (t.includes('squad')) return 4;
+    if (t.includes('trio')) return 3;
+    if (t.includes('duo')) return 2;
+    return 1;
+  };
+
+  const maxSquadSize = getSquadSize(tournament.matchType || 'solo');
+  const [teamName, setTeamName] = useState("");
+  const [teamMembers, setTeamMembers] = useState<{ username: string, inGameId: string }[]>([]);
+  const [hasInitialized, setHasInitialized] = useState(false);
+
   // Initialize teammates array based on squad size
   useEffect(() => {
-    setTeammates([]);
-    setSelectedSquadMembers([]);
-    setCurrentGameId(userProfile?.gameId || "");
-    setIsEditingGameId(!userProfile?.gameId); // Auto-edit if no game ID
-  }, [open, tournament, userProfile?.gameId]);
-  
+    if (open && !hasInitialized) {
+      setTeamName("");
+
+      // Initialize members based on squad size
+      const initialMembers = Array.from({ length: maxSquadSize }, (_, i) => ({
+        username: i === 0 ? (userProfile?.username || userProfile?.displayName || "") : "",
+        inGameId: i === 0 ? (userProfile?.gameId || "") : ""
+      }));
+      setTeamMembers(initialMembers);
+      setHasInitialized(true);
+    }
+
+    if (!open && hasInitialized) {
+      setHasInitialized(false);
+    }
+  }, [open, tournament, userProfile, maxSquadSize, hasInitialized]);
+
   // Get wallet balance
   const walletBalance = userProfile?.walletBalance ?? 0;
   // Defensive: always use a valid currency string
   const currency: Currency = (userProfile?.currency || tournament.currency || 'INR') as Currency;
   // Derive the correct currency for the tournament based on its country
-  const tournamentCurrency: Currency = tournament.country 
+  const tournamentCurrency: Currency = tournament.country
     ? getCurrencyByCountry(tournament.country)
     : (tournament.currency || 'INR') as Currency;
   const userCurrency: Currency = (userProfile?.currency || 'INR') as Currency;
-  
+
   // Convert tournament entry fee to user's currency for balance comparison
   const convertedEntryFee = convertTournamentPrice(tournament.entryFee, tournamentCurrency, currency);
-  
+
   // Check if user has sufficient balance
   const hasInsufficientBalance = walletBalance < convertedEntryFee;
   const handleJoin = async () => {
@@ -76,24 +94,30 @@ export default function SimpleJoinModal({
       });
       return;
     }
-    
-    // Check if Game ID is provided (use current or saved)
-    const gameIdToUse = currentGameId.trim() || userProfile.gameId?.trim();
-    if (!gameIdToUse) {
-      setShowGameIdDialog(true);
+
+
+
+    // Check if all team members have Game Name and Game ID
+    const isTeamValid = teamMembers.every(m => m.username.trim() && m.inGameId.trim());
+    if (!isTeamValid) {
+      toast({
+        title: "Incomplete Details",
+        description: "Please enter Game Name and Game ID for all players.",
+        variant: "destructive",
+      });
       return;
     }
 
-    // Update user's game ID if it's different
-    if (currentGameId.trim() && currentGameId.trim() !== userProfile.gameId) {
-      try {
-        // Update the user's profile with new game ID
-        // This would require a user update function - for now, we'll proceed with the current game ID
-        } catch (error) {
-        console.error("Error updating game ID:", error);
-      }
+    // Check if Team Name is provided for non-solo matches
+    if (maxSquadSize > 1 && !teamName.trim()) {
+      toast({
+        title: "Team Name Required",
+        description: "Please enter a team name.",
+        variant: "destructive",
+      });
+      return;
     }
-    
+
     // Check wallet balance
     if (hasInsufficientBalance) {
       toast({
@@ -103,52 +127,33 @@ export default function SimpleJoinModal({
       });
       return;
     }
-    
-    // Validate teammates for non-solo tournaments
-    if (maxSquadSize > 1) {
-      const validTeammates = selectedSquadMembers.filter(member => member !== "" && member !== "__none__");
-      const manualTeammates = teammates.filter(teammate => teammate.trim() !== "");
-      
-      const totalTeammates = validTeammates.length + manualTeammates.length;
-      
-      if (totalTeammates !== maxSquadSize - 1) {
-        toast({
-          title: "Incomplete Team",
-          description: `Please select or add ${maxSquadSize - 1} teammate${maxSquadSize - 1 > 1 ? 's' : ''} for ${tournament.type} mode.`,
-          variant: "destructive",
-        });
-        return;
-      }
-    }
 
     try {
       setIsJoining(true);
-        // Prepare teammate data
-      let teammatesToSend: string[] = [];
-      
-      if (maxSquadSize > 1) {
-        // Collect valid squad members
-        const validSquadMembers = selectedSquadMembers
-          .filter(member => member !== "" && member !== "__none__");
-          
-        // Collect manual entries
-        const manualEntries = teammates
-          .filter(teammate => teammate.trim() !== "")
-          .map(teammate => teammate.trim());
-        
-        // Combine both
-        teammatesToSend = [...validSquadMembers, ...manualEntries];
-        
-        }
-        // Call joinTournament with the tournament ID, teammates, and game ID
-      const success = await joinTournament(tournament.id, teammatesToSend, gameIdToUse);
+
+      // Prepare members data
+      const membersToSend = teamMembers.map((m, i) => ({
+        username: m.username.trim(),
+        inGameId: m.inGameId.trim(),
+        isOwner: i === 0,
+        id: i === 0 ? userProfile.uid : `teammate_${Date.now()}_${i}`
+      }));
+
+      // Call joinTournament with updated signature
+      const success = await joinTournament(
+        tournament.id,
+        membersToSend.slice(1).map(m => m.username), // Backward compatible teammates
+        membersToSend[0].inGameId, // gameIdOverride
+        teamName.trim(),
+        membersToSend
+      );
       if (success) {
         toast({
           title: "Tournament Joined!",
           description: `You have successfully joined ${tournament.title}. Entry fee of ${formatTournamentPrice(tournament.entryFee, tournamentCurrency, userCurrency)} has been deducted from your wallet.`,
         });
         onClose();
-        
+
         // Navigate to My Matches
         setTimeout(() => {
           navigate("/matches");
@@ -174,210 +179,168 @@ export default function SimpleJoinModal({
 
   return (
     <>
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="bg-dark-card border-gray-800 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="pb-4">
-          <DialogTitle className="text-xl font-bold">Join Tournament</DialogTitle>
-          <DialogDescription className="text-gray-400">
-            {tournament.title}
-          </DialogDescription>
-        </DialogHeader>
+      <Dialog open={open} onOpenChange={onClose}>
+        <DialogContent className="bg-dark-card border-gray-800 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="pb-4">
+            <DialogTitle className="text-xl font-bold">Join Tournament</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              {tournament.title}
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-4 px-1">
-          {/* Tournament Info */}
-          <div className="bg-dark-lighter rounded-lg p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-yellow-500" />
-                <span className="text-sm text-gray-400">Prize Pool</span>
+          <div className="space-y-4 px-1">
+            {/* Tournament Info */}
+            <div className="bg-dark-lighter rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Trophy className="h-4 w-4 text-yellow-500" />
+                  <span className="text-sm text-gray-400">Prize Pool</span>
+                </div>
+                <span className="font-semibold text-green-400">
+                  {formatTournamentPrice(tournament.prizePool, tournamentCurrency, userCurrency)}
+                </span>
               </div>
-              <span className="font-semibold text-green-400">
-                {formatTournamentPrice(tournament.prizePool, tournamentCurrency, userCurrency)}
-              </span>
-            </div>
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-blue-500" />
-                <span className="text-sm text-gray-400">Entry Fee</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-blue-500" />
+                  <span className="text-sm text-gray-400">Entry Fee</span>
+                </div>
+                <span className="font-semibold">
+                  {formatTournamentPrice(tournament.entryFee, tournamentCurrency, userCurrency)}
+                </span>
               </div>
-              <span className="font-semibold">
-                {formatTournamentPrice(tournament.entryFee, tournamentCurrency, userCurrency)}
-              </span>
-            </div>
 
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-purple-500" />
-                <span className="text-sm text-gray-400">Mode</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-purple-500" />
+                  <span className="text-sm text-gray-400">Mode</span>
+                </div>
+                {/* Defensive: always use a valid matchType string */}
+                <span className="font-semibold capitalize">{(tournament.matchType || 'solo').toLowerCase()}</span>
               </div>
-              {/* Defensive: always use a valid matchType string */}
-              <span className="font-semibold capitalize">{(tournament.matchType || 'solo').toLowerCase()}</span>
             </div>
-          </div>
 
-          {/* Wallet Balance */}
-          <div className="bg-dark-lighter rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-400">Your Wallet Balance</span>
-              <span className={`font-semibold ${hasInsufficientBalance ? 'text-red-400' : 'text-green-400'}`}>
-                {formatCurrency(walletBalance, currency)}
-              </span>
+            {/* Wallet Balance */}
+            <div className="bg-dark-lighter rounded-lg p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-400">Your Wallet Balance</span>
+                <span className={`font-semibold ${hasInsufficientBalance ? 'text-red-400' : 'text-green-400'}`}>
+                  {formatCurrency(walletBalance, currency)}
+                </span>
+              </div>
             </div>
-          </div>
 
-          {/* Game ID Section */}
-          <div className="bg-dark-lighter rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm text-gray-400">Game ID</span>
-              {userProfile?.gameId && !isEditingGameId && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsEditingGameId(true)}
-                  className="text-blue-400 hover:text-blue-300"
-                >
-                  <Edit className="h-4 w-4 mr-1" />
-                  Edit
-                </Button>
-              )}
-            </div>
-            
-            {isEditingGameId ? (
-              <div className="space-y-3">
-                <div>
-                  <Label htmlFor="gameId" className="text-sm text-gray-300">Enter your Game ID</Label>
+            {/* Dynamic Team Fields */}
+            <div className="space-y-4">
+              {maxSquadSize > 1 && (
+                <div className="bg-dark-lighter rounded-lg p-4">
+                  <Label htmlFor="teamName" className="text-sm text-gray-400 mb-2 block">Team Name</Label>
                   <Input
-                    id="gameId"
-                    type="text"
-                    value={currentGameId}
-                    onChange={(e) => setCurrentGameId(e.target.value)}
-                    placeholder="Enter your in-game ID"
-                    className="mt-1 bg-dark border-gray-700 text-white"
+                    id="teamName"
+                    value={teamName}
+                    onChange={(e) => setTeamName(e.target.value)}
+                    placeholder="Enter your team name"
+                    className="bg-dark border-gray-700 text-white"
                   />
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
+              )}
+
+              {teamMembers.map((member, index) => (
+                <div key={index} className="bg-dark-lighter rounded-lg p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-primary">
+                      {maxSquadSize === 1 ? "Player Details" : `Player ${index + 1}${index === 0 ? " (You)" : ""}`}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs text-gray-400 mb-1 block">Game Name</Label>
+                      <Input
+                        value={member.username}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setTeamMembers(prev => prev.map((m, i) =>
+                            i === index ? { ...m, username: val } : m
+                          ));
+                        }}
+                        placeholder="In-game Name"
+                        className="bg-dark border-gray-700 text-white text-sm"
+                        disabled={index === 0 && !!userProfile?.username}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-gray-400 mb-1 block">Game ID</Label>
+                      <Input
+                        value={member.inGameId}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setTeamMembers(prev => prev.map((m, i) =>
+                            i === index ? { ...m, inGameId: val } : m
+                          ));
+                        }}
+                        placeholder="In-game ID"
+                        className="bg-dark border-gray-700 text-white text-sm"
+                        disabled={index === 0 && !!userProfile?.gameId}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Insufficient Balance Warning */}
+            {hasInsufficientBalance && (
+              <div className="flex items-start gap-2 bg-red-900 bg-opacity-20 text-red-400 p-3 rounded-md">
+                <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium">Insufficient Balance</p>
+                  <p className="text-sm">
+                    Add {formatCurrency(convertedEntryFee - walletBalance, currency)} more to your wallet to join this tournament.
+                  </p>
+                  <button
+                    className="mt-2 px-3 py-1 bg-green-700 hover:bg-green-800 text-white rounded text-sm font-semibold"
                     onClick={() => {
-                      if (currentGameId.trim()) {
-                        setIsEditingGameId(false);
-                      }
+                      window.location.href = '/wallet?addMoney=1';
                     }}
-                    disabled={!currentGameId.trim()}
-                    className="flex-1 bg-green-700 hover:bg-green-800"
                   >
-                    <Check className="h-4 w-4 mr-1" />
-                    Save
-                  </Button>
-                  {userProfile?.gameId && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setCurrentGameId(userProfile.gameId || "");
-                        setIsEditingGameId(false);
-                      }}
-                      className="flex-1 border-gray-700"
-                    >
-                      <X className="h-4 w-4 mr-1" />
-                      Cancel
-                    </Button>
-                  )}
+                    Add Money
+                  </button>
                 </div>
               </div>
-            ) : (
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-green-400">
-                  {currentGameId || userProfile?.gameId || "Not set"}
-                </span>
-                {userProfile?.gameId && currentGameId === userProfile.gameId && (
-                  <span className="text-xs text-blue-400 bg-blue-900 bg-opacity-30 px-2 py-1 rounded">
-                    Saved ID
-                  </span>
-                )}
-              </div>
             )}
-          </div>
 
-          {/* Insufficient Balance Warning */}
-          {hasInsufficientBalance && (
-            <div className="flex items-start gap-2 bg-red-900 bg-opacity-20 text-red-400 p-3 rounded-md">
-              <AlertTriangle className="h-5 w-5 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-medium">Insufficient Balance</p>
-                <p className="text-sm">
-                  Add {formatCurrency(convertedEntryFee - walletBalance, currency)} more to your wallet to join this tournament.
-                </p>
-                <button
-                  className="mt-2 px-3 py-1 bg-green-700 hover:bg-green-800 text-white rounded text-sm font-semibold"
-                  onClick={() => {
-                    window.location.href = '/wallet?addMoney=1';
-                  }}
-                >
-                  Add Money
-                </button>
-              </div>
+            {/* Team Members (for duo/squad) */}
+            {/* (Removed: No team member UI for single participant registration) */}
+
+            <div className="flex gap-3 pt-4">
+              <Button
+                variant="outline"
+                onClick={onClose}
+                className="flex-1 border-gray-700"
+                disabled={isJoining}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleJoin}
+                disabled={
+                  hasInsufficientBalance ||
+                  isJoining ||
+                  !teamMembers.every(m => m.username.trim() && m.inGameId.trim()) ||
+                  (maxSquadSize > 1 && !teamName.trim())
+                }
+                className="flex-1 bg-gradient-to-r from-primary to-secondary"
+              >
+                {isJoining ? "Joining..." : `Join (${formatTournamentPrice(tournament.entryFee, tournamentCurrency, currency)})`}
+              </Button>
             </div>
-          )}
-
-          {/* Team Members (for duo/squad) */}
-          {/* (Removed: No team member UI for single participant registration) */}
-          
-          <div className="flex gap-3 pt-4">
-            <Button
-              variant="outline"
-              onClick={onClose}
-              className="flex-1 border-gray-700"
-              disabled={isJoining}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleJoin}
-              disabled={hasInsufficientBalance || isJoining || (!currentGameId.trim() && !userProfile?.gameId)}
-              className="flex-1 bg-gradient-to-r from-primary to-secondary"
-            >
-              {isJoining ? "Joining..." : `Join (${formatTournamentPrice(tournament.entryFee, tournamentCurrency, currency)})`}
-            </Button>
           </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
 
-    {/* Game ID Required Dialog */}
-    <Dialog open={showGameIdDialog} onOpenChange={setShowGameIdDialog}>
-      <DialogContent className="bg-dark border-gray-800 text-white max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-orange-400">
-            <AlertTriangle className="h-5 w-5" />
-            Game ID Required
-          </DialogTitle>
-          <DialogDescription className="text-gray-300">
-            You need to set your Game ID in your profile before joining tournaments.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex gap-3 pt-4">
-          <Button
-            variant="outline"
-            onClick={() => setShowGameIdDialog(false)}
-            className="flex-1 border-gray-700"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={() => {
-              setShowGameIdDialog(false);
-              onClose();
-              navigate('/profile');
-            }}
-            className="flex-1 bg-gradient-to-r from-primary to-secondary"
-          >
-            Go to Profile
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+
     </>
   );
 }

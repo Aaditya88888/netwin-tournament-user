@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom"; // Use react-router-dom
 import { useAuth } from "@/hooks/useAuth";
 import { useTournaments } from "@/hooks/useTournaments";
+import { useMatches } from "@/hooks/useMatches";
+import { useToast } from "@/hooks/use-toast";
 import type { Currency, Tournament } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -14,10 +16,13 @@ import { formatTournamentPrice, getCurrencyByCountry } from "@/utils/currencyCon
 import SimpleJoinModal from "@/components/tournaments/SimpleJoinModal";
 import PostTournamentResult from "@/components/match/PostTournamentResult";
 
-const TournamentDetails = () => {  const { id } = useParams<{ id: string }>(); // React Router useParams
+const TournamentDetails = () => {
+  const { id } = useParams<{ id: string }>(); // React Router useParams
   const navigate = useNavigate(); // React Router navigation
   const { userProfile } = useAuth();
   const { getTournament, tournaments, loading: tournamentLoading, userMatches } = useTournaments();
+  const { uploadMatchResult } = useMatches();
+  const { toast } = useToast();
   const [tournament, setTournament] = useState<Tournament | null>(null);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [isJoining] = useState(false); // Remove setIsJoining if not used
@@ -28,10 +33,10 @@ const TournamentDetails = () => {  const { id } = useParams<{ id: string }>(); /
   const hasSubmittedResult = userMatch?.resultSubmitted || false;
 
   // Derive the correct currency for the tournament based on its country
-  const tournamentCurrency = tournament?.country 
+  const tournamentCurrency = tournament?.country
     ? getCurrencyByCountry(tournament.country)
     : (tournament?.currency as Currency) || 'INR';
-useEffect(() => {
+  useEffect(() => {
     if (id && tournaments.length > 0) {
       // First try to find the tournament in the loaded tournaments
       const tournamentData = getTournament(id);
@@ -85,7 +90,7 @@ useEffect(() => {
         </div>
       </div>
     );
-  }    const handleShare = async () => {
+  } const handleShare = async () => {
     try {
       await navigator.share({
         title: tournament.title,
@@ -95,22 +100,22 @@ useEffect(() => {
     } catch (error) {
       // Share failed silently
     }
-  };  return (
+  }; return (
     <div className="container py-4 sm:py-6 lg:py-8 max-w-7xl mx-auto px-3 sm:px-4">
       {/* Back Button and Share - Mobile optimized */}
       <div className="flex items-center justify-between mb-4 sm:mb-6">
-        <Button 
-          variant="ghost" 
-          className="gap-1 sm:gap-2 p-2 sm:p-3" 
+        <Button
+          variant="ghost"
+          className="gap-1 sm:gap-2 p-2 sm:p-3"
           onClick={() => navigate("/tournaments")}
         >
           <ChevronLeft className="h-4 w-4" />
           <span className="hidden sm:inline">Back to Tournaments</span>
           <span className="sm:hidden">Back</span>
         </Button>
-        <Button 
-          variant="outline" 
-          className="gap-1 sm:gap-2 p-2 sm:p-3" 
+        <Button
+          variant="outline"
+          className="gap-1 sm:gap-2 p-2 sm:p-3"
           onClick={handleShare}
         >
           <Share2 className="h-4 w-4" />
@@ -128,29 +133,28 @@ useEffect(() => {
             {tournament.description || "No description available"}
           </p>
         </div>
-        
+
         <div className="flex items-center gap-2 sm:gap-3">
           <Badge variant="outline" className="border-primary text-primary text-xs sm:text-sm">
             {tournament.matchType ? tournament.matchType.toUpperCase() : "SOLO"}
           </Badge>
-          <Badge 
-            className={`text-xs sm:text-sm ${
-              tournament.status === "upcoming" 
-                ? "bg-yellow-600 hover:bg-yellow-700" 
-                : tournament.status === "live"
+          <Badge
+            className={`text-xs sm:text-sm ${tournament.status === "upcoming"
+              ? "bg-yellow-600 hover:bg-yellow-700"
+              : tournament.status === "live"
                 ? "bg-green-600 hover:bg-green-700"
                 : "bg-gray-600 hover:bg-gray-700"
-            }`}
+              }`}
           >
             {tournament.status ? tournament.status.toUpperCase() : "UPCOMING"}
           </Badge>
         </div>
-        
+
         {/* Join Button - Full width on mobile */}
-        <Button 
+        <Button
           className="w-full sm:w-auto bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
           onClick={() => setShowJoinModal(true)}
-          disabled={tournament.status !== "upcoming" || isJoining || tournamentLoading}
+          disabled={tournament.status !== "upcoming" || isJoining || tournamentLoading || hasRegistered}
           size="lg"
         >
           {isJoining ? (
@@ -158,11 +162,12 @@ useEffect(() => {
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
               Joining...
             </>
-          ) : 
-           tournament.status === "completed" ? "Tournament Ended" :
-           tournament.status === "cancelled" ? "Tournament Cancelled" :
-           tournament.status === "live" ? "Registration Closed" :
-           `Join Tournament (${formatTournamentPrice(tournament.entryFee ?? 0, tournamentCurrency, userProfile?.currency || "INR")})`}
+          ) :
+            hasRegistered ? "Joined" :
+              tournament.status === "completed" ? "Tournament Ended" :
+                tournament.status === "cancelled" ? "Tournament Cancelled" :
+                  tournament.status === "live" ? "Registration Closed" :
+                    `Join Tournament (${formatTournamentPrice(tournament.entryFee ?? 0, tournamentCurrency, userProfile?.currency || "INR")})`}
         </Button>
       </div>      {/* Tournament Details Grid - Mobile responsive */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
@@ -173,7 +178,7 @@ useEffect(() => {
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary/20 rounded-lg flex items-center justify-center flex-shrink-0">
                 <Trophy className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-              </div>              
+              </div>
               <div className="min-w-0 flex-1">
                 <div className="text-xs sm:text-sm text-gray-400">Prize Pool</div>
                 <div className="font-semibold text-sm sm:text-base truncate">
@@ -209,7 +214,7 @@ useEffect(() => {
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary/20 rounded-lg flex items-center justify-center flex-shrink-0">
                 <Users className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-              </div>              
+              </div>
               <div className="min-w-0 flex-1">
                 <div className="text-xs sm:text-sm text-gray-400">Entry Fee</div>
                 <div className="font-semibold text-sm sm:text-base truncate">
@@ -223,7 +228,7 @@ useEffect(() => {
                 <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-xs sm:text-sm text-gray-400">Date</div>                
+                <div className="text-xs sm:text-sm text-gray-400">Date</div>
                 <div className="font-semibold text-sm sm:text-base truncate">
                   {tournament.startTime ? new Date(tournament.startTime).toLocaleDateString() : 'TBD'}
                 </div>
@@ -235,7 +240,7 @@ useEffect(() => {
                 <Clock className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-xs sm:text-sm text-gray-400">Time</div>                
+                <div className="text-xs sm:text-sm text-gray-400">Time</div>
                 <div className="font-semibold text-sm sm:text-base truncate">
                   {tournament.startTime ? new Date(tournament.startTime).toLocaleTimeString() : 'TBD'}
                 </div>
@@ -268,19 +273,19 @@ useEffect(() => {
         <div className="bg-dark-card border border-gray-800 rounded-xl p-4 sm:p-6">
           <h2 className="text-lg font-semibold mb-4">Rules & Information</h2>
           <div className="space-y-3 sm:space-y-4">
-            <Separator className="bg-gray-800" />            
+            <Separator className="bg-gray-800" />
             <div>
               <h3 className="font-medium mb-2 text-sm sm:text-base">Tournament Rules</h3>
               <div className="bg-gray-900/40 rounded-lg p-3">
                 <ol className="list-decimal list-inside text-gray-200 space-y-1 text-xs sm:text-sm pl-4">
                   {Array.isArray(tournament.rules)
                     ? tournament.rules.map((rule, index) => (
-                        <li key={index} className="mb-1 leading-relaxed">{rule}</li>
-                      ))
+                      <li key={index} className="mb-1 leading-relaxed">{rule}</li>
+                    ))
                     : (tournament.rules && typeof tournament.rules === 'string' && tournament.rules.trim() !== '')
                       ? tournament.rules.split(/\r?\n/).map((rule, index) => (
-                          <li key={index} className="mb-1 leading-relaxed">{rule}</li>
-                        ))
+                        <li key={index} className="mb-1 leading-relaxed">{rule}</li>
+                      ))
                       : <li>Tournament rules will be provided before the match starts.</li>}
                 </ol>
               </div>
@@ -300,8 +305,21 @@ useEffect(() => {
             isCompleted={tournament.status === "completed"}
             hasSubmittedResult={hasSubmittedResult}
             onResultSubmit={async (screenshot: string, kills: number, position: number) => {
-              // TODO: Implement tournament result submission
-              return true;
+              if (!id) return false;
+              const success = await uploadMatchResult(userMatch?.id || id, screenshot, kills, position);
+              if (success) {
+                toast({
+                  title: "Result Submitted",
+                  description: "Your match result has been submitted for verification.",
+                });
+              } else {
+                toast({
+                  variant: "destructive",
+                  title: "Submission Failed",
+                  description: "Failed to submit result. Please try again.",
+                });
+              }
+              return success;
             }}
           />
         </div>

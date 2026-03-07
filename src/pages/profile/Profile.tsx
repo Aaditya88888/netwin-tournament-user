@@ -38,7 +38,7 @@ type ProfileFormValues = z.infer<typeof profileSchema>;
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { userProfile, updateUserProfile, checkUsernameExists } = useAuth();
+  const { userProfile, updateUserProfile, checkUsernameExists, signOut } = useAuth();
   const { updateGameId, uploadProfileImage } = useUser();
   const { toast } = useToast();
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
@@ -154,7 +154,22 @@ export default function Profile() {
       });
     }
   };
-  // Logout removed (signOut unused)
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      navigate("/");
+      toast({
+        title: "Logged out",
+        description: "You have been logged out successfully.",
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Logout failed",
+        description: "Failed to sign out. Please try again.",
+      });
+    }
+  };
 
   const getKycBadgeVariant = (status: string) => {
     switch (status?.toUpperCase()) {
@@ -247,9 +262,8 @@ export default function Profile() {
                 <span className="min-w-0">Settings</span>
               </button>
               <button
-                onClick={() => {/* implement logout if needed */}}
+                onClick={handleLogout}
                 className="w-full flex items-center gap-2 sm:gap-3 px-3 py-2 rounded-lg text-left transition hover:bg-red-600/20 text-red-400 hover:text-red-300 touch-target text-sm sm:text-base"
-                disabled
               >
                 <LogOut className="h-4 w-4 flex-shrink-0" />
                 <span className="min-w-0">Logout</span>

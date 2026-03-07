@@ -1,6 +1,6 @@
 import React from "react";
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { 
+import {
   User as FirebaseUser,
   UserCredential,
   signInWithEmailAndPassword,
@@ -40,7 +40,7 @@ async function fetchUserProfile(user: FirebaseUser): Promise<UserProfile | undef
         return undefined;
       }
     }
-    
+
     const userDoc = await getDoc(doc(db, 'users', user.uid));
     if (userDoc.exists()) {
       const data = userDoc.data();
@@ -50,12 +50,12 @@ async function fetchUserProfile(user: FirebaseUser): Promise<UserProfile | undef
       if (typeof kycStatus === 'string') {
         kycStatus = kycStatus.toUpperCase();
       }
-      
+
       // Normalize legacy "VERIFIED" status to "APPROVED" for consistency
       if (kycStatus === 'VERIFIED') {
         kycStatus = 'APPROVED';
       }
-      
+
       const profile: UserProfile = {
         uid: user.uid,
         email: user.email || '',
@@ -132,15 +132,15 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
     try {
       setLoading(true);
       setError(null);
-      
+
       // If currency is being changed, convert the wallet balance
       const updatedData = { ...data };
-      
+
       // If username is being changed, also update the normalized username
       if (data.username && data.username !== userProfile.username) {
         updatedData.usernameNormalized = data.username.toLowerCase();
       }
-      
+
       if (data.currency && data.currency !== userProfile.currency && userProfile.walletBalance > 0) {
         const { convertCurrency, formatCurrencyWithSymbol } = await import('@/utils/currencyConverter');
         const originalBalance = userProfile.walletBalance;
@@ -150,7 +150,7 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
           data.currency
         );
         updatedData.walletBalance = convertedBalance;
-        
+
         // Create a transaction record for the currency conversion
         try {
           const conversionTransaction = {
@@ -173,7 +173,7 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
             createdAt: new Date(),
             updatedAt: new Date(),
           };
-          
+
           // Try to save the conversion transaction
           await addDoc(collection(db, 'transactions'), conversionTransaction);
         } catch (transactionError) {
@@ -182,9 +182,9 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
       }
 
       updatedData.updatedAt = new Date();
-      
+
       await updateDoc(doc(db, 'users', user.uid), updatedData);
-      
+
       setUserProfile(prev => prev ? { ...prev, ...updatedData } : null);
     } catch (error) {
       setError('Failed to update profile');
@@ -195,8 +195,12 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
   };
 
   const handleAuthError = (error: unknown) => {
+    console.error('Full Auth Error object:', error); // Log the full error for debugging
     if (error instanceof Error) {
       const authError = error as AuthError;
+      console.error('Auth Error Code:', authError.code);
+      console.error('Auth Error Message:', authError.message);
+
       switch (authError.code) {
         case 'auth/invalid-email':
           return 'Invalid email address';
@@ -207,19 +211,27 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
         case 'auth/wrong-password':
           return 'Incorrect password. Please check your password and try again.';
         case 'auth/invalid-credential':
-          return 'Invalid email or password. Please check your credentials and try again.';
+          return 'Invalid email or password. \n\n' +
+            '1. Verify your account exists in the Firebase Console.\n' +
+            '2. If you are running locally, ensure you have added the App Check debug token to the Firebase Console.';
         case 'auth/invalid-login-credentials':
-          return 'Invalid email or password. Please check your credentials and try again.';
+          return 'Invalid email or password. \n\n' +
+            '1. Verify your account exists in the Firebase Console.\n' +
+            '2. If you are running locally, ensure you have added the App Check debug token to the Firebase Console.';
         case 'auth/too-many-requests':
           return 'Too many failed login attempts. Please try again later.';
         case 'auth/email-already-in-use':
           return 'Email already in use';
         case 'auth/operation-not-allowed':
-          return 'Operation not allowed';
+          return 'Email/Password sign-in is not enabled in the Firebase Console.';
         case 'auth/weak-password':
           return 'Password is too weak';
         case 'auth/network-request-failed':
           return 'Network error. Please check your internet connection.';
+        case 'auth/api-key-not-valid':
+          return 'Invalid Firebase API Key. Please check your configuration.';
+        case 'auth/internal-error':
+          return 'Internal Firebase error. Please check the network console for details.';
         default:
           return authError.message;
       }
@@ -231,7 +243,9 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
     try {
       setLoading(true);
       setError(null);
-      await signInWithEmailAndPassword(auth, email, password);
+      const trimmedEmail = email.trim();
+      const trimmedPassword = password.trim();
+      await signInWithEmailAndPassword(auth, trimmedEmail, trimmedPassword);
     } catch (err) {
       const errorMessage = handleAuthError(err);
       setError(errorMessage);
@@ -239,21 +253,21 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
     } finally {
       setLoading(false);
     }
-  };  const signUpWithEmail = async (email: string, password: string) => {
+  }; const signUpWithEmail = async (email: string, password: string) => {
     try {
       setLoading(true);
       setError(null);
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      
+
       // Get additional signup data from sessionStorage
       const signupDataStr = sessionStorage.getItem('signupData');
       const signupData = signupDataStr ? JSON.parse(signupDataStr) : {};
-      
+
       // Generate unique username if not provided or if it conflicts
       let username = signupData.username || 'User';
       const baseUsername = username;
       let counter = 1;
-      
+
       // Check if username already exists in Firestore
       let usernameExists = true;
       while (usernameExists) {
@@ -262,7 +276,7 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
           where('username', '==', username)
         );
         const usersSnapshot = await getDocs(usersQuery);
-        
+
         if (usersSnapshot.empty) {
           usernameExists = false;
         } else {
@@ -270,7 +284,7 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
           counter++;
         }
       }
-      
+
       // Create default profile with signup data
       let country = signupData.country || '';
       let currency = signupData.currency || '';
@@ -303,10 +317,10 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
         createdAt: new Date(),
         updatedAt: new Date(),
       };
-      
+
       await setDoc(doc(db, 'users', userCredential.user.uid), defaultProfile);
       setUserProfile(defaultProfile);
-      
+
       // Clear the temporary signup data
       sessionStorage.removeItem('signupData');
     } catch (err) {
@@ -322,11 +336,11 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
         size: 'invisible',
       });
-      
+
       const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, recaptchaVerifier);
       return confirmationResult;
     } catch (err) {
@@ -344,16 +358,16 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
       setError(null);
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
-      
+
       if (result.user) {
         const userRef = doc(db, 'users', result.user.uid);
         const userDoc = await getDoc(userRef);
-        
+
         if (!userDoc.exists()) {
           // Don't create a profile automatically - just set basic user info
           // The user will be redirected to complete their profile
           setUserProfile(null);
-          
+
           // Store incomplete user data for profile completion
           sessionStorage.setItem('incompleteGoogleUser', JSON.stringify({
             uid: result.user.uid,
@@ -461,9 +475,9 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
     try {
       setLoading(true);
       setError(null);
-      
+
       if (!user) throw new Error('User not authenticated');
-      
+
       await sendEmailVerification(user);
     } catch (err) {
       const errorMessage = handleAuthError(err);
@@ -480,17 +494,17 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
     try {
       setLoading(true);
       setError(null);
-      
+
       // This is a placeholder - in a real implementation, you would:
       // 1. Send OTP to email via your backend/cloud function
       // 2. User enters OTP
       // 3. Verify OTP on backend
       // 4. Get custom token from backend
       // 5. Sign in with custom token
-      
+
       // For now, we'll throw an error to indicate this needs backend implementation
       throw new Error('OTP sign-in requires backend implementation');
-      
+
     } catch (err) {
       const errorMessage = handleAuthError(err);
       setError(errorMessage);
@@ -507,7 +521,7 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
       setLoading(true);
       if (user) {
         setUser(user);
-        
+
         // Check if this is a Google sign-in with incomplete profile
         const incompleteUserData = sessionStorage.getItem('incompleteGoogleUser');
         if (incompleteUserData) {
@@ -518,7 +532,7 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
             return;
           }
         }
-        
+
         // Normal profile fetch for existing users
         const profile = await fetchUserProfile(user);
         setUserProfile(profile || null);
@@ -543,18 +557,18 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
         (docSnapshot) => {
           if (docSnapshot.exists()) {
             const data = docSnapshot.data();
-            
+
             // Normalize kycStatus to uppercase
             let kycStatus = data.kycStatus ?? 'NOT_SUBMITTED';
             if (typeof kycStatus === 'string') {
               kycStatus = kycStatus.toUpperCase();
             }
-            
+
             // Normalize legacy "VERIFIED" status to "APPROVED" for consistency
             if (kycStatus === 'VERIFIED') {
               kycStatus = 'APPROVED';
             }
-            
+
             const profile: UserProfile = {
               uid: user.uid,
               email: user.email || '',
@@ -588,7 +602,7 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
   // Add a function to refresh the user profile and update state
   const refreshUserProfile = async () => {
     if (!user) return;
-    
+
     // Check if this is an incomplete Google user
     const incompleteUserData = sessionStorage.getItem('incompleteGoogleUser');
     if (incompleteUserData) {
@@ -598,21 +612,21 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
         return;
       }
     }
-    
+
     try {
       // Get the current profile from Firestore
       const userRef = doc(db, 'users', user.uid);
       const userDoc = await getDoc(userRef);
-      
+
       if (userDoc.exists()) {
         const data = userDoc.data();
-        
+
         // Normalize kycStatus to uppercase
         let kycStatus = data.kycStatus ?? 'NOT_SUBMITTED';
         if (typeof kycStatus === 'string') {
           kycStatus = kycStatus.toUpperCase();
         }
-        
+
         const updatedProfile: UserProfile = {
           uid: user.uid,
           email: user.email || '',
@@ -625,28 +639,28 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
           createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : data.createdAt,
           updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : data.updatedAt,
         };
-        
+
         setUserProfile(updatedProfile);
-        
+
         // Try to fetch wallet balance from API to get the latest state
         try {
           const walletResponse = await fetch(`/api/users/${user.uid}/wallet`);
           if (walletResponse.ok) {
             const { walletBalance } = await walletResponse.json();
-            
+
             // Update local state with latest balance (keep other profile data)
             setUserProfile(prev => prev ? { ...prev, walletBalance } : updatedProfile);
           }
         } catch (apiError) {
           // Continue with profile from Firestore - already set above
         }
-        
+
         return;
       }
     } catch (error) {
       // Error refreshing user profile - will try fallback method
     }
-    
+
     // If we reach here, something went wrong, try the fetchUserProfile function as fallback
     try {
       const profile = await fetchUserProfile(user);
@@ -668,7 +682,7 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
       }
 
       const incompleteUser = JSON.parse(incompleteUserStr);
-      
+
       // Create complete profile
       const completeProfile: UserProfile = {
         uid: incompleteUser.uid,
@@ -691,10 +705,10 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
       // Save to Firestore
       await setDoc(doc(db, 'users', incompleteUser.uid), completeProfile);
       setUserProfile(completeProfile);
-      
+
       // Clean up session storage
       sessionStorage.removeItem('incompleteGoogleUser');
-      
+
     } catch (err) {
       const errorMessage = handleAuthError(err);
       setError(errorMessage);
@@ -705,23 +719,23 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
   };
 
   return (
-    <FirebaseContext.Provider value={{ 
-      user, 
-      userProfile, 
-      loading, 
-      error, 
-      signInWithEmail, 
-      signUpWithEmail, 
-      signInWithPhone, 
-      signInWithGoogle, 
-      verifyOtp, 
-      signInWithOTP, 
-      signOut, 
-      updateUserProfile, 
-      updateWalletBalance, 
-      checkUsernameExists, 
-      sendEmailVerification: sendEmailVerificationEmail, 
-      isEmailVerified, 
+    <FirebaseContext.Provider value={{
+      user,
+      userProfile,
+      loading,
+      error,
+      signInWithEmail,
+      signUpWithEmail,
+      signInWithPhone,
+      signInWithGoogle,
+      verifyOtp,
+      signInWithOTP,
+      signOut,
+      updateUserProfile,
+      updateWalletBalance,
+      checkUsernameExists,
+      sendEmailVerification: sendEmailVerificationEmail,
+      isEmailVerified,
       refreshUserProfile,
       completeGoogleProfile
     }}>

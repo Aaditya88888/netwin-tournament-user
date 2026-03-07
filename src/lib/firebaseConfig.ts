@@ -1,15 +1,15 @@
 // Firebase configuration and initialization for development and production
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { 
-  getAuth, 
+import {
+  getAuth,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithPhoneNumber,
   RecaptchaVerifier,
   AuthError
 } from "firebase/auth";
-import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
+import { initializeAppCheck, ReCaptchaV3Provider, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getMessaging } from 'firebase/messaging';
@@ -54,18 +54,31 @@ if (typeof window !== 'undefined') {
     // Enable debug token in development
     if (isDevelopment) {
       const debugToken = import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN;
-      // @ts-expect-error - Adding debug token to window for Firebase App Check in development
-      window.FIREBASE_APPCHECK_DEBUG_TOKEN = debugToken === 'true' ? true : (debugToken || true);
+      console.log('Firebase App Check: Development mode detected');
+      if (debugToken) {
+        console.log('Firebase App Check: Using debug token');
+        // @ts-expect-error - Adding debug token to window for Firebase App Check in development
+        window.FIREBASE_APPCHECK_DEBUG_TOKEN = debugToken === 'true' ? true : debugToken;
+      }
     }
-      
-    // Initialize App Check
-    appCheck = initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider(import.meta.env.VITE_RECAPTCHA_SITE_KEY),
-      isTokenAutoRefreshEnabled: true
-    });
-    
-    } catch (error) {
-    console.warn('⚠️ App Check initialization failed, continuing without it:', error);
+
+    // Initialize App Check only if recaptcha key is present and NOT disabled
+    const isAppCheckDisabled = import.meta.env.VITE_DISABLE_APP_CHECK === 'true';
+
+    if (import.meta.env.VITE_RECAPTCHA_SITE_KEY && !isAppCheckDisabled) {
+      console.log('Firebase App Check: Initializing with Site Key');
+      // Use Enterprise provider for Enterprise keys
+      appCheck = initializeAppCheck(app, {
+        provider: new ReCaptchaEnterpriseProvider(import.meta.env.VITE_RECAPTCHA_SITE_KEY),
+        isTokenAutoRefreshEnabled: true
+      });
+      console.log('Firebase App Check: Initialized successfully with Enterprise provider');
+    } else {
+      console.log('Firebase App Check: Skipping initialization (Disabled or missing key)');
+    }
+
+  } catch (error) {
+    console.warn('⚠️ App Check initialization failed:', error);
     // Continue without App Check in development to avoid blocking authentication
   }
 }
@@ -98,9 +111,9 @@ export const setupRecaptcha = (phoneNumber: string) => {
   const recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
     size: 'normal',
     callback: () => {
-      }
+    }
   });
-  
+
   return signInWithPhoneNumber(auth, phoneNumber, recaptchaVerifier);
 };
 
