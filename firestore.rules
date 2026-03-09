@@ -109,7 +109,7 @@ service cloud.firestore {
     // Pending withdrawals
     match /pending_withdrawals/{withdrawalId} {
       allow read: if (isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid || isAdmin() || (isModerator() && hasModeratorPermission('view_pending_withdrawals')))) || isAdminPanel();
-      allow create: if ((isAuthenticated() && request.resource.data.userId == request.auth.uid && request.resource.data.amount > 0 && request.resource.data.status == 'PENDING')) || isAdminPanel() || (isModerator() && hasModeratorPermission('create_pending_withdrawals'));
+      allow create: if ((isAuthenticated() && request.resource.data.userId == request.auth.uid && request.resource.data.amount > 0 && request.resource.data.status == 'PENDING' && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.country != 'India')) || isAdminPanel() || (isModerator() && hasModeratorPermission('create_pending_withdrawals'));
       allow update: if ((isAuthenticated() && (isAdmin() || (isModerator() && hasModeratorPermission('edit_pending_withdrawals')))) || isAdminPanel());
     }
     // Payment links

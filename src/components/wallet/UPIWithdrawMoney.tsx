@@ -80,13 +80,13 @@ const UPIWithdrawMoney = ({ onClose, onSuccess }: UPIWithdrawMoneyProps) => {
   useEffect(() => {
     const loadData = async () => {
       if (!userProfile) return;
-      
+
       try {
         const [requests, upiIds] = await Promise.all([
           UPIWalletService.getUserWithdrawalRequests(userProfile.uid),
           UPIWalletService.getUserSavedUpiIds(userProfile.uid)
         ]);
-        
+
         setWithdrawalRequests(requests);
         setSavedUpiIds(upiIds);
       } catch (error) {
@@ -115,10 +115,10 @@ const UPIWithdrawMoney = ({ onClose, onSuccess }: UPIWithdrawMoneyProps) => {
   const handleDeleteSavedUpi = async (upiId: string) => {
     try {
       if (!userProfile) return;
-      
+
       await UPIWalletService.deleteSavedUpiId(userProfile.uid, upiId);
       setSavedUpiIds(prev => prev.filter(id => id !== upiId));
-      
+
       toast({
         title: "UPI ID Deleted",
         description: "Saved UPI ID has been removed",
@@ -188,7 +188,7 @@ const UPIWithdrawMoney = ({ onClose, onSuccess }: UPIWithdrawMoneyProps) => {
 
       setWithdrawAmount(data.amount);
       setSuccess(true);
-      
+
       toast({
         title: "Withdrawal Request Submitted",
         description: `Your withdrawal request for ${formatCurrency(data.amount, userProfile.currency)} has been submitted and is pending approval.`,
@@ -213,6 +213,47 @@ const UPIWithdrawMoney = ({ onClose, onSuccess }: UPIWithdrawMoneyProps) => {
 
   if (!userProfile) return null;
 
+  // Check if user is from India - Restriction for legal reasons
+  if (userProfile.country === 'India') {
+    return (
+      <Card className="bg-dark-card border-gray-800 text-white">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ArrowUpRight className="h-5 w-5 text-primary" />
+            <span>Withdraw Funds</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert className="bg-red-900 bg-opacity-20 border-red-800">
+            <AlertCircle className="h-4 w-4 text-red-500" />
+            <AlertTitle className="text-red-500">Service Unavailable</AlertTitle>
+            <AlertDescription className="text-red-400">
+              Withdrawals are currently unavailable for users in India due to local legal and regulatory restrictions. We apologize for the inconvenience.
+            </AlertDescription>
+          </Alert>
+
+          <div className="mt-6 p-4 bg-dark-lighter rounded-lg border border-gray-800">
+            <div className="flex items-start gap-2">
+              <Info className="h-4 w-4 text-gray-400 mt-0.5" />
+              <p className="text-sm text-gray-400">
+                You can still use your balance to participate in tournaments. If you have any questions, please contact our support team.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+        <CardFooter className="flex justify-end border-t border-gray-800 pt-4">
+          <Button
+            variant="outline"
+            className="border-gray-700 hover:bg-dark-lighter"
+            onClick={onClose}
+          >
+            Close
+          </Button>
+        </CardFooter>
+      </Card>
+    );
+  }
+
   // Show KYC verification alert if KYC is not approved
   if (!isKycApproved(userProfile.kycStatus)) {
     return (
@@ -231,8 +272,8 @@ const UPIWithdrawMoney = ({ onClose, onSuccess }: UPIWithdrawMoneyProps) => {
               You need to complete KYC verification before withdrawing funds. This ensures secure and compliant transactions.
             </AlertDescription>
           </Alert>
-            <div className="mt-6 text-center">
-            <Button 
+          <div className="mt-6 text-center">
+            <Button
               asChild
               className="bg-gradient-to-r from-primary to-secondary"
             >
@@ -241,8 +282,8 @@ const UPIWithdrawMoney = ({ onClose, onSuccess }: UPIWithdrawMoneyProps) => {
           </div>
         </CardContent>
         <CardFooter className="flex justify-end border-t border-gray-800 pt-4">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             className="border-gray-700 hover:bg-dark-lighter"
             onClick={onClose}
           >
@@ -267,7 +308,7 @@ const UPIWithdrawMoney = ({ onClose, onSuccess }: UPIWithdrawMoneyProps) => {
               Your withdrawal request for {formatCurrency(withdrawAmount, userProfile.currency)} has been submitted successfully.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="bg-dark-lighter p-4 rounded-lg mt-4">
             <div className="flex justify-between mb-2">
               <span className="text-gray-400">Amount Requested</span>
@@ -286,8 +327,8 @@ const UPIWithdrawMoney = ({ onClose, onSuccess }: UPIWithdrawMoneyProps) => {
               </div>
             </div>
           </div>
-          
-          <Button 
+
+          <Button
             className="w-full mt-4 bg-gradient-to-r from-primary to-secondary"
             onClick={onClose}
           >
@@ -306,212 +347,212 @@ const UPIWithdrawMoney = ({ onClose, onSuccess }: UPIWithdrawMoneyProps) => {
           <span>Withdraw Funds</span>
         </CardTitle>
       </CardHeader>
-      
+
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>          <CardContent className="space-y-6">
-            {/* Balance Information */}
-            <div className="flex items-center justify-between p-4 bg-dark-lighter rounded-lg">
-              <div>
-                <p className="text-sm text-gray-400">Available Balance</p>
-                <p className="text-lg font-semibold">{formatCurrency(userProfile.walletBalance, userProfile.currency)}</p>
-              </div>
-              <div className="bg-green-600/20 p-2 rounded-lg text-sm text-green-400">
-                Min: ₹10
-              </div>
-            </div>
-
-            {/* Quick Amount Selection */}
+          {/* Balance Information */}
+          <div className="flex items-center justify-between p-4 bg-dark-lighter rounded-lg">
             <div>
-              <p className="text-sm font-medium mb-3">Quick Amount</p>
-              <div className="grid grid-cols-3 gap-2">
-                {quickAmounts.map((amount) => (
-                  <Button
-                    key={amount}
-                    type="button"
-                    variant="outline"
-                    className="border-gray-700 hover:bg-primary hover:border-primary"
-                    onClick={() => form.setValue('amount', amount)}
-                    disabled={amount > userProfile.walletBalance}
-                  >
-                    <IndianRupee className="h-3 w-3 mr-1" />
-                    {amount}
-                  </Button>
+              <p className="text-sm text-gray-400">Available Balance</p>
+              <p className="text-lg font-semibold">{formatCurrency(userProfile.walletBalance, userProfile.currency)}</p>
+            </div>
+            <div className="bg-green-600/20 p-2 rounded-lg text-sm text-green-400">
+              Min: ₹10
+            </div>
+          </div>
+
+          {/* Quick Amount Selection */}
+          <div>
+            <p className="text-sm font-medium mb-3">Quick Amount</p>
+            <div className="grid grid-cols-3 gap-2">
+              {quickAmounts.map((amount) => (
+                <Button
+                  key={amount}
+                  type="button"
+                  variant="outline"
+                  className="border-gray-700 hover:bg-primary hover:border-primary"
+                  onClick={() => form.setValue('amount', amount)}
+                  disabled={amount > userProfile.walletBalance}
+                >
+                  <IndianRupee className="h-3 w-3 mr-1" />
+                  {amount}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Amount Input */}
+          <FormField
+            control={form.control}
+            name="amount"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Withdrawal Amount</FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <IndianRupee className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      className="pl-10 bg-dark-lighter border-0 focus-visible:ring-2 focus-visible:ring-primary"
+                      {...field}
+                      onChange={e => field.onChange(e.target.value === "" ? "" : Number(e.target.value))}
+                    />
+                  </div>
+                </FormControl>
+                <FormDescription>
+                  Available: {formatCurrency(userProfile.walletBalance, userProfile.currency)}
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {/* Saved UPI IDs */}
+          {savedUpiIds.length > 0 && (
+            <div>
+              <p className="text-sm font-medium mb-3">Saved UPI IDs</p>
+              <div className="space-y-2">
+                {savedUpiIds.map((upiId, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-dark-lighter rounded-lg">
+                    <span className="text-sm">{upiId}</span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleUseSavedUpi(upiId)}
+                      >
+                        Use
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleCopyUpi(upiId)}
+                      >
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDeleteSavedUpi(upiId)}
+                        className="text-red-400 border-red-700 hover:bg-red-900/20"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
+          )}
 
-            {/* Amount Input */}
-            <FormField
-              control={form.control}
-              name="amount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Withdrawal Amount</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <IndianRupee className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
-                        type="number"
-                        placeholder="0"
-                        className="pl-10 bg-dark-lighter border-0 focus-visible:ring-2 focus-visible:ring-primary"
-                        {...field}
-                        onChange={e => field.onChange(e.target.value === "" ? "" : Number(e.target.value))}
-                      />
-                    </div>
-                  </FormControl>
-                  <FormDescription>
-                    Available: {formatCurrency(userProfile.walletBalance, userProfile.currency)}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Saved UPI IDs */}
-            {savedUpiIds.length > 0 && (
-              <div>
-                <p className="text-sm font-medium mb-3">Saved UPI IDs</p>
-                <div className="space-y-2">
-                  {savedUpiIds.map((upiId, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-dark-lighter rounded-lg">
-                      <span className="text-sm">{upiId}</span>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleUseSavedUpi(upiId)}
-                        >
-                          Use
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleCopyUpi(upiId)}
-                        >
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDeleteSavedUpi(upiId)}
-                          className="text-red-400 border-red-700 hover:bg-red-900/20"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+          {/* UPI ID Input */}
+          <FormField
+            control={form.control}
+            name="upiId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>UPI ID</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="username@paytm"
+                    className="bg-dark-lighter border-0 focus-visible:ring-2 focus-visible:ring-primary"
+                    {...field}
+                  />
+                </FormControl>
+                <FormDescription>
+                  Enter your UPI ID where you want to receive the money
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
             )}
+          />
 
-            {/* UPI ID Input */}
-            <FormField
-              control={form.control}
-              name="upiId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>UPI ID</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="username@paytm"
-                      className="bg-dark-lighter border-0 focus-visible:ring-2 focus-visible:ring-primary"
-                      {...field}
-                    />
-                  </FormControl>
+          {/* Save UPI ID Checkbox */}
+          <FormField
+            control={form.control}
+            name="saveUpiId"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel>
+                    Save this UPI ID for future withdrawals
+                  </FormLabel>
                   <FormDescription>
-                    Enter your UPI ID where you want to receive the money
+                    We&apos;ll securely store this UPI ID for faster withdrawals
                   </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                </div>
+              </FormItem>
+            )}
+          />
 
-            {/* Save UPI ID Checkbox */}
-            <FormField
-              control={form.control}
-              name="saveUpiId"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>
-                      Save this UPI ID for future withdrawals
-                    </FormLabel>
-                    <FormDescription>
-                      We&apos;ll securely store this UPI ID for faster withdrawals
-                    </FormDescription>
-                  </div>
-                </FormItem>
-              )}
-            />
-
-            {/* Recent Withdrawal Requests */}
-            {withdrawalRequests.length > 0 && (
-              <div>
-                <p className="text-sm font-medium mb-3">Recent Withdrawal Requests</p>
-                <div className="space-y-3 max-h-40 overflow-y-auto">
-                  {withdrawalRequests.slice(0, 3).map((request) => (
-                    <div key={request.id} className="flex items-center justify-between p-3 bg-dark-lighter rounded-lg">
-                      <div className="flex-1">
-                        <p className="font-medium">{formatCurrency(request.amount, request.currency)}</p>
-                        <p className="text-xs text-gray-400">
-                          {new Date(request.createdAt).toLocaleDateString()} • {request.upiId}
-                        </p>
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className={
-                          request.status === 'APPROVED' 
-                            ? "border-green-600 text-green-500"
-                            : request.status === 'REJECTED'
+          {/* Recent Withdrawal Requests */}
+          {withdrawalRequests.length > 0 && (
+            <div>
+              <p className="text-sm font-medium mb-3">Recent Withdrawal Requests</p>
+              <div className="space-y-3 max-h-40 overflow-y-auto">
+                {withdrawalRequests.slice(0, 3).map((request) => (
+                  <div key={request.id} className="flex items-center justify-between p-3 bg-dark-lighter rounded-lg">
+                    <div className="flex-1">
+                      <p className="font-medium">{formatCurrency(request.amount, request.currency)}</p>
+                      <p className="text-xs text-gray-400">
+                        {new Date(request.createdAt).toLocaleDateString()} • {request.upiId}
+                      </p>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className={
+                        request.status === 'APPROVED'
+                          ? "border-green-600 text-green-500"
+                          : request.status === 'REJECTED'
                             ? "border-red-600 text-red-500"
                             : "border-yellow-600 text-yellow-500"
-                        }
-                      >
-                        {request.status === 'APPROVED' && <CheckCircle className="h-3 w-3 mr-1" />}
-                        {request.status === 'PENDING' && <Clock className="h-3 w-3 mr-1" />}
-                        {request.status === 'REJECTED' && <X className="h-3 w-3 mr-1" />}
-                        {request.status}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
+                      }
+                    >
+                      {request.status === 'APPROVED' && <CheckCircle className="h-3 w-3 mr-1" />}
+                      {request.status === 'PENDING' && <Clock className="h-3 w-3 mr-1" />}
+                      {request.status === 'REJECTED' && <X className="h-3 w-3 mr-1" />}
+                      {request.status}
+                    </Badge>
+                  </div>
+                ))}
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Important Information */}
-            <Alert className="bg-dark-lighter border-gray-700">
-              <Info className="h-4 w-4 text-primary" />
-              <AlertTitle>Important</AlertTitle>
-              <AlertDescription className="text-gray-400">
-                • Withdrawal requests are reviewed within 24-48 hours
-                <br />
-                • Ensure your UPI ID is correct to avoid delays
-                <br />
-                • Minimum withdrawal amount is ₹10
-              </AlertDescription>
-            </Alert>
-          </CardContent>
+          {/* Important Information */}
+          <Alert className="bg-dark-lighter border-gray-700">
+            <Info className="h-4 w-4 text-primary" />
+            <AlertTitle>Important</AlertTitle>
+            <AlertDescription className="text-gray-400">
+              • Withdrawal requests are reviewed within 24-48 hours
+              <br />
+              • Ensure your UPI ID is correct to avoid delays
+              <br />
+              • Minimum withdrawal amount is ₹10
+            </AlertDescription>
+          </Alert>
+        </CardContent>
 
           <CardFooter className="flex justify-between border-t border-gray-800 pt-4">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="border-gray-700 hover:bg-dark-lighter"
               onClick={onClose}
               type="button"
             >
               Cancel
             </Button>
-            <Button 
+            <Button
               className="bg-gradient-to-r from-primary to-secondary"
               type="submit"
               disabled={loading}

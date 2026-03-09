@@ -2,7 +2,9 @@ import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 dotenv.config();
 class EmailService {
-    constructor() {
+    getTransporter() {
+        if (this.transporter)
+            return this.transporter;
         const user = process.env.SMTP_USER || process.env.EMAIL_USER;
         const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
         const host = process.env.SMTP_HOST || (user ? 'smtp.zoho.com' : undefined);
@@ -24,9 +26,7 @@ class EmailService {
             console.warn('Emails will be logged to console instead of sent.');
             console.warn('==========================================\n');
         }
-        else {
-            this.verifyConnection();
-        }
+        return this.transporter;
     }
     async verifyConnection() {
         try {
@@ -86,7 +86,7 @@ class EmailService {
             return;
         }
         try {
-            await this.transporter.sendMail(mailOptions);
+            await this.getTransporter().sendMail(mailOptions);
         }
         catch (error) {
             if (error instanceof Error) {

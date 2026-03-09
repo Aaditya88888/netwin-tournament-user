@@ -1,7 +1,6 @@
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import dotenv from 'dotenv';
-import path from 'path';
 dotenv.config();
 if (!getApps().length) {
     const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
@@ -15,21 +14,10 @@ if (!getApps().length) {
         }
         catch (error) {
             console.error('❌ Failed to parse FIREBASE_SERVICE_ACCOUNT:', error);
+            initializeApp();
         }
     }
     else {
-        const serviceAccountPath = path.join(process.cwd(), 'serviceAccountKey.json');
-        try {
-            initializeApp({
-                credential: cert(serviceAccountPath)
-            });
-            console.log('✅ Firebase Admin initialized using local serviceAccountKey.json');
-        }
-        catch (error) {
-            console.warn('⚠️ No Firebase credentials found. Admin operations may fail.');
-        }
-    }
-    if (!getApps().length) {
         initializeApp();
         console.log('✅ Firebase Admin initialized using default environment credentials');
     }

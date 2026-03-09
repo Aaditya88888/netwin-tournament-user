@@ -218,7 +218,9 @@ export default function PostTournamentResult({
                         <Label htmlFor="kills" className="text-sm font-medium flex items-center gap-1">
                           Total Kills
                           {aiAnalysis?.success && aiAnalysis.isAuthentic && (
-                            <Sparkles className="h-3 w-3 text-purple-400" title="Detected by AI" />
+                            <span title="Detected by AI">
+                              <Sparkles className="h-3 w-3 text-purple-400" />
+                            </span>
                           )}
                         </Label>
                         <Input
@@ -238,7 +240,9 @@ export default function PostTournamentResult({
                         <Label htmlFor="position" className="text-sm font-medium flex items-center gap-1">
                           Final Position
                           {aiAnalysis?.success && aiAnalysis.isAuthentic && (
-                            <Sparkles className="h-3 w-3 text-purple-400" title="Detected by AI" />
+                            <span title="Detected by AI">
+                              <Sparkles className="h-3 w-3 text-purple-400" />
+                            </span>
                           )}
                         </Label>
                         <Input

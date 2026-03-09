@@ -7,7 +7,9 @@ dotenv.config();
 class EmailService {
   private transporter: nodemailer.Transporter;
 
-  constructor() {
+  private getTransporter(): nodemailer.Transporter {
+    if (this.transporter) return this.transporter;
+
     const user = process.env.SMTP_USER || process.env.EMAIL_USER;
     const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
     const host = process.env.SMTP_HOST || (user ? 'smtp.zoho.com' : undefined);
@@ -31,10 +33,9 @@ class EmailService {
       console.warn('SMTP credentials not fully configured.');
       console.warn('Emails will be logged to console instead of sent.');
       console.warn('==========================================\n');
-    } else {
-      // Verify connection only if configured
-      this.verifyConnection();
     }
+
+    return this.transporter;
   }
 
   private async verifyConnection() {
@@ -99,7 +100,7 @@ class EmailService {
       return;
     }
     try {
-      await this.transporter.sendMail(mailOptions);
+      await this.getTransporter().sendMail(mailOptions);
     } catch (error) {
       if (error instanceof Error) {
         console.error('Nodemailer Error Details:', {

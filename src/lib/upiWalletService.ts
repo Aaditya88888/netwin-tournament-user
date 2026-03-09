@@ -1,11 +1,11 @@
-import { 
-  collection, 
-  addDoc, 
-  getDocs, 
-  doc, 
-  updateDoc, 
-  query, 
-  where, 
+import {
+  collection,
+  addDoc,
+  getDocs,
+  doc,
+  updateDoc,
+  query,
+  where,
   orderBy,
   serverTimestamp,
   getDoc,
@@ -82,7 +82,12 @@ export class UPIWalletService {
       // Get user details
       const userDoc = await getDoc(doc(db, 'users', userId));
       const userData = userDoc.data();
-      
+
+      // Check for country restriction (India)
+      if (userData?.country === 'India') {
+        throw new Error("Withdrawals are currently unavailable in your region due to legal restrictions.");
+      }
+
       const withdrawalRequest: Omit<PendingWithdrawal, 'id'> = {
         userId,
         amount,
@@ -130,12 +135,12 @@ export class UPIWalletService {
     try {
       const collectionRef = collection(db, 'pending_deposits');
       const q = query(
-        collectionRef, 
+        collectionRef,
         where('userId', '==', userId),
         orderBy('createdAt', 'asc')
       );
       const querySnapshot = await getDocs(q);
-      
+
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
@@ -158,7 +163,7 @@ export class UPIWalletService {
         where('userId', '==', userId),
         orderBy('createdAt', 'desc')
       );
-      
+
       const querySnapshot = await getDocs(q);
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
@@ -178,7 +183,7 @@ export class UPIWalletService {
     try {
       const userRef = doc(db, 'user_upi_ids', userId);
       const userDoc = await getDoc(userRef);
-      
+
       if (userDoc.exists()) {
         const currentUpiIds = userDoc.data().upiIds || [];
         if (!currentUpiIds.includes(upiId)) {
@@ -220,11 +225,11 @@ export class UPIWalletService {
     try {
       const userRef = doc(db, 'user_upi_ids', userId);
       const userDoc = await getDoc(userRef);
-      
+
       if (userDoc.exists()) {
         const currentUpiIds = userDoc.data().upiIds || [];
         const updatedUpiIds = currentUpiIds.filter((id: string) => id !== upiId);
-        
+
         await updateDoc(userRef, {
           upiIds: updatedUpiIds,
           updatedAt: serverTimestamp()
@@ -245,7 +250,7 @@ export class UPIWalletService {
         orderBy('createdAt', 'desc')
       );
       const querySnapshot = await getDocs(q);
-      
+
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
@@ -268,7 +273,7 @@ export class UPIWalletService {
         orderBy('createdAt', 'desc')
       );
       const querySnapshot = await getDocs(q);
-      
+
       return querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),

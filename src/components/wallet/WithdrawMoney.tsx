@@ -249,7 +249,48 @@ const WithdrawMoney = ({ onClose }: WithdrawMoneyProps) => {
   };
   
   const minWithdrawal = MIN_WITHDRAWAL[userProfile.currency as 'INR' | 'NGN' | 'USD'] || 10;
-    // Show KYC verification alert if KYC is not approved
+  // Check if user is from India - Restriction for legal reasons
+  if (userProfile.country === 'India') {
+    return (
+      <Card className="bg-dark-card border-gray-800 text-white">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ArrowUpRight className="h-5 w-5 text-primary" />
+            <span>Withdraw Funds</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert className="bg-red-900 bg-opacity-20 border-red-800">
+            <AlertCircle className="h-4 w-4 text-red-500" />
+            <AlertTitle className="text-red-500">Service Unavailable</AlertTitle>
+            <AlertDescription className="text-red-400">
+              Withdrawals are currently unavailable for users in India due to local legal and regulatory restrictions. We apologize for the inconvenience.
+            </AlertDescription>
+          </Alert>
+          
+          <div className="mt-6 p-4 bg-dark-lighter rounded-lg border border-gray-800">
+            <div className="flex items-start gap-2">
+              <Info className="h-4 w-4 text-gray-400 mt-0.5" />
+              <p className="text-sm text-gray-400">
+                You can still use your balance to participate in tournaments. If you have any questions, please contact our support team.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+        <CardFooter className="flex justify-end border-t border-gray-800 pt-4">
+          <Button 
+            variant="outline" 
+            className="border-gray-700 hover:bg-dark-lighter"
+            onClick={onClose}
+          >
+            Close
+          </Button>
+        </CardFooter>
+      </Card>
+    );
+  }
+
+  // Show KYC verification alert if KYC is not approved
   if (!isKycApproved(userProfile.kycStatus)) {
     return (
       <Card className="bg-dark-card border-gray-800 text-white">
@@ -268,7 +309,8 @@ const WithdrawMoney = ({ onClose }: WithdrawMoneyProps) => {
             </AlertDescription>
           </Alert>
           
-          <div className="mt-6 text-center">            <Button
+          <div className="mt-6 text-center">
+            <Button
               asChild
               className="bg-gradient-to-r from-primary to-secondary"
             >

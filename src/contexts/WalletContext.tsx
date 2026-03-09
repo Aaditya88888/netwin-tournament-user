@@ -56,8 +56,8 @@ export const WalletProvider = ({ children }: WalletProviderProps) => {
   const [loading, setLoading] = useState(false);
   const { userProfile, updateWalletBalance } = useFirebase();
   const addMoney = useCallback(async (
-    amount: number, 
-    user: UserProfile, 
+    amount: number,
+    user: UserProfile,
     paymentMethod: string
   ): Promise<boolean> => {
     try {
@@ -83,7 +83,7 @@ export const WalletProvider = ({ children }: WalletProviderProps) => {
         amount,
         currency: user.currency || 'INR',
         status: initialStatus,
-        paymentMethod,        description: `Manual deposit via ${paymentMethod}`,
+        paymentMethod, description: `Manual deposit via ${paymentMethod}`,
         metadata: {
           paymentMethod,
           simulatedGateway: 'MANUAL_DEPOSIT'
@@ -111,7 +111,7 @@ export const WalletProvider = ({ children }: WalletProviderProps) => {
             simulatedGateway: 'MANUAL_DEPOSIT'
           }
         };
-        
+
         // Save to pending_deposits for admin workflow
         const pendingDepositRef = await addDoc(collection(db, 'pending_deposits'), depositRequest);
         // 2. Also save to transactions collection for history
@@ -120,16 +120,16 @@ export const WalletProvider = ({ children }: WalletProviderProps) => {
           reference: `DEP_${Date.now()}`,
           pendingDepositId: pendingDepositRef.id // Link to pending deposit
         };
-        
+
         const transactionRef = await addDoc(collection(db, 'transactions'), transactionWithRef);
         // Add to local transactions for user history
-        const newTransaction: WalletTransaction = { 
-          ...transactionWithRef, 
+        const newTransaction: WalletTransaction = {
+          ...transactionWithRef,
           id: transactionRef.id,
           description: `Manual deposit request - ${paymentMethod}`,
           status: 'PENDING'
         };
-        
+
         setTransactions(prev => {
           return [newTransaction, ...prev];
         });
@@ -164,6 +164,11 @@ export const WalletProvider = ({ children }: WalletProviderProps) => {
       if (!user || !user.uid) {
         console.error("Invalid user data:", user);
         throw new Error("User ID is required");
+      }
+
+      // Check for country restriction (India)
+      if (user.country === 'India') {
+        throw new Error("Withdrawals are currently unavailable in your region due to legal restrictions.");
       }
 
       await new Promise(resolve => setTimeout(resolve, 1500));
@@ -268,7 +273,7 @@ export const WalletProvider = ({ children }: WalletProviderProps) => {
       if (!response.ok) {
         throw new Error('Failed to fetch transactions');
       }
-      
+
       const { transactions: userTransactions } = await response.json();
       // Normalize the transactions
       const normalizedTransactions = userTransactions.map((tx: WalletTransaction) => ({
@@ -287,7 +292,7 @@ export const WalletProvider = ({ children }: WalletProviderProps) => {
           collection(db, 'transactions'),
           where('userId', '==', userProfile.uid)
         );
-        
+
         const querySnapshot = await getDocs(q);
         const userTransactions = querySnapshot.docs.map(doc => {
           const data = doc.data();
