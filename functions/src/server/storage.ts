@@ -1,14 +1,10 @@
 // Simple Firebase-compatible storage interface for server-side operations
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 // Removed import.meta.url for CommonJS compatibility
-
-// Load environment variables
-dotenv.config();
 
 // Initialize Firebase Admin (if not already initialized)
 // Initialize Firebase Admin (if not already initialized)
