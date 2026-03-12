@@ -26,20 +26,15 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { User, Gamepad2, Globe, Phone } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { detectUserCountry, GeoLocation } from "@/utils/geoService";
 
 // Form schema for profile completion
 const profileCompletionSchema = z.object({
   displayName: z.string().min(1, {
     message: "Display name is required.",
   }),
-  username: z.string().min(3, {
-    message: "Username must be at least 3 characters.",
-  }),
+  username: z.string().optional(),
   phoneNumber: z.string().optional(),
-  gameId: z.string().optional(),
-  gameMode: z.enum(["PUBG", "BGMI", "FreeFire"]),
-  country: z.string().min(1, "Please select a country"),
-  currency: z.enum(["INR", "NGN", "USD"]),
   termsAccepted: z.boolean().refine((val) => val === true, {
     message: "You must accept the terms and conditions."
   }),
@@ -55,6 +50,7 @@ export default function CompleteProfile() {
   const [loading, setLoading] = useState(false);
   const [usernameChecking, setUsernameChecking] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [detectedGeo, setDetectedGeo] = useState<GeoLocation | null>(null);
   const [incompleteUserData, setIncompleteUserData] = useState<{
     uid: string;
     email: string;
@@ -77,16 +73,20 @@ export default function CompleteProfile() {
   const form = useForm<ProfileCompletionValues>({
     resolver: zodResolver(profileCompletionSchema),
     defaultValues: {
-      displayName: "",
       username: "",
       phoneNumber: "",
-      gameId: "",
-      gameMode: "PUBG",
-      country: "India",
-      currency: "INR",
       termsAccepted: false,
     },
   });
+
+  // Automatically detect user country on component mount
+  useEffect(() => {
+    const detect = async () => {
+      const geo = await detectUserCountry();
+      setDetectedGeo(geo);
+    };
+    detect();
+  }, []);
 
   // Set default values when incomplete user data is loaded
   useEffect(() => {
@@ -120,14 +120,7 @@ export default function CompleteProfile() {
     return () => clearTimeout(timeoutId);
   }, [form.watch('username')]);
 
-  // Set currency based on country
-  const handleCountryChange = (value: string) => {
-    let currency = "USD";
-    if (value === "India") currency = "INR";
-    if (value === "Nigeria") currency = "NGN";
-
-    form.setValue("currency", currency as "INR" | "NGN" | "USD");
-  };
+  // Check username availability
 
   // Check username availability
   const checkUsernameAvailability = async (username: string) => {
@@ -160,10 +153,10 @@ export default function CompleteProfile() {
   // Handle form submission
   const onSubmit = async (values: ProfileCompletionValues) => {
     setLoading(true);
-    
+
     try {
-      // Check username one more time before submission
-      if (!usernameAvailable) {
+      // Check username one more time if provided
+      if (values.username && usernameAvailable === false) {
         toast({
           variant: "destructive",
           title: "Username not available",
@@ -175,19 +168,17 @@ export default function CompleteProfile() {
       // Use the complete Google profile function
       await completeGoogleProfile({
         displayName: values.displayName,
-        username: values.username,
+        username: values.username || incompleteUserData?.email.split('@')[0] || '',
         phoneNumber: values.phoneNumber,
-        gameId: values.gameId,
-        gameMode: values.gameMode,
-        country: values.country,
-        currency: values.currency, // Currency is set by handleCountryChange
+        country: detectedGeo?.country || 'United States',
+        currency: detectedGeo?.currency || 'USD',
       });
-      
+
       toast({
         title: "Profile completed successfully!",
         description: "Welcome to Netwin! Your profile has been set up.",
       });
-      
+
       navigate("/dashboard");
     } catch (error) {
       const err = error as { message?: string };
@@ -212,7 +203,7 @@ export default function CompleteProfile() {
             Please provide additional details to complete your account setup
           </p>
         </CardHeader>
-        
+
         <CardContent>
           {/* Display email from Google */}
           {incompleteUserData && (
@@ -228,7 +219,7 @@ export default function CompleteProfile() {
               </div>
             </div>
           )}
-          
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               {/* Display Name */}
@@ -259,7 +250,7 @@ export default function CompleteProfile() {
                 name="username"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Username</FormLabel>
+                    <FormLabel>Username (Optional)</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
@@ -276,12 +267,12 @@ export default function CompleteProfile() {
                         Checking username availability...
                       </p>
                     )}
-                    {usernameAvailable === true && (
+                    {field.value && usernameAvailable === true && (
                       <p className="mt-2 text-sm text-green-400">
                         ✓ Username is available
                       </p>
                     )}
-                    {usernameAvailable === false && (
+                    {field.value && usernameAvailable === false && (
                       <p className="mt-2 text-sm text-red-400">
                         ✗ Username is already taken
                       </p>
@@ -312,82 +303,8 @@ export default function CompleteProfile() {
                 )}
               />
 
-              {/* Game ID */}
-              <FormField
-                control={form.control}
-                name="gameId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Game ID (Optional)</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Gamepad2 className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                        <Input
-                          placeholder="Your PUBG/BGMI ID"
-                          className="pl-10 bg-dark-lighter border-gray-700"
-                          {...field}
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
 
-              {/* Game Mode */}
-              <FormField
-                control={form.control}
-                name="gameMode"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Game Mode</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger className="bg-dark-lighter border-gray-700">
-                          <SelectValue placeholder="Select game mode" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="PUBG">PUBG Mobile</SelectItem>
-                        <SelectItem value="BGMI">BGMI</SelectItem>
-                        <SelectItem value="FreeFire">Free Fire</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
 
-              {/* Country */}
-              <FormField
-                control={form.control}
-                name="country"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Country</FormLabel>
-                    <Select 
-                      onValueChange={(value) => {
-                        field.onChange(value);
-                        handleCountryChange(value);
-                      }} 
-                      defaultValue={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="bg-dark-lighter border-gray-700">
-                          <Globe className="w-4 h-4 mr-2" />
-                          <SelectValue placeholder="Select your country" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="India">🇮🇳 India</SelectItem>
-                        <SelectItem value="Nigeria">🇳🇬 Nigeria</SelectItem>
-                        <SelectItem value="United States">🇺🇸 United States</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
 
               {/* Terms and Conditions */}
               <FormField
@@ -421,7 +338,7 @@ export default function CompleteProfile() {
               <Button
                 type="submit"
                 className="w-full bg-gradient-to-r from-primary to-secondary"
-                disabled={loading || !usernameAvailable || !form.getValues('termsAccepted')}
+                disabled={loading || (!!form.watch('username') && usernameAvailable === false) || !form.watch('termsAccepted')}
               >
                 {loading ? "Completing Profile..." : "Complete Profile"}
               </Button>

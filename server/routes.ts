@@ -99,6 +99,41 @@ export function registerRoutes(app: Express) {
     }
   });
 
+  // Username availability check endpoint (public)
+  app.get("/api/auth/check-username/:username", async (req: Request, res: Response) => {
+    try {
+      const { username } = req.params;
+
+      if (!username || username.length < 3) {
+        return res.status(400).json({ message: 'Username must be at least 3 characters' });
+      }
+
+      const normalizedUsername = username.toLowerCase();
+
+      // Use admin SDK to check if username exists (bypasses security rules)
+      const usersRef = storage.adminDb.collection('users');
+
+      // Check normalized field
+      const normalizedQuery = await usersRef.where('usernameNormalized', '==', normalizedUsername).limit(1).get();
+
+      if (!normalizedQuery.empty) {
+        return res.json({ available: false });
+      }
+
+      // Fallback for legacy records
+      const legacyQuery = await usersRef.where('username', '==', username).limit(1).get();
+
+      if (!legacyQuery.empty) {
+        return res.json({ available: false });
+      }
+
+      res.json({ available: true });
+    } catch (error) {
+      logger.error(`Error checking username: ${error}`);
+      res.status(500).json({ message: 'Failed to check username availability' });
+    }
+  });
+
   // Server-side notification creation (for admin operations)
   app.post("/api/admin/notifications", async (req: Request, res: Response) => {
     try {

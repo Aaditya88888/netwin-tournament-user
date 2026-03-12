@@ -27,22 +27,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { detectUserCountry, GeoLocation } from "@/utils/geoService";
 
 // Define form schema for email signup validation
 const signupWithEmailSchema = z.object({
-  username: z.string().min(3, {
-    message: "Username must be at least 3 characters.",
-  }),
+  username: z.string().optional(),
   email: z.string().email({
     message: "Please enter a valid email address.",
   }),
   password: z.string().min(6, {
     message: "Password must be at least 6 characters.",
   }),
-  gameId: z.string().optional(),
-  gameMode: z.enum(["PUBG", "BGMI", "FreeFire"]),
-  country: z.string(),
-  currency: z.enum(["INR", "NGN", "USD"]),
   termsAccepted: z.literal(true, {
     errorMap: () => ({ message: "You must accept the terms and conditions." }),
   }),
@@ -60,6 +55,7 @@ export default function Signup() {
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [pendingSignupData, setPendingSignupData] = useState<SignupWithEmailValues | null>(null);
+  const [detectedGeo, setDetectedGeo] = useState<GeoLocation | null>(null);
 
   // Email form
   const emailForm = useForm<SignupWithEmailValues>({
@@ -68,12 +64,18 @@ export default function Signup() {
       username: "",
       email: "",
       password: "",
-      gameMode: "PUBG",
-      country: "India",
-      currency: "INR",
       termsAccepted: true,
     },
   });
+
+  // Automatically detect user country on component mount
+  useEffect(() => {
+    const detect = async () => {
+      const geo = await detectUserCountry();
+      setDetectedGeo(geo);
+    };
+    detect();
+  }, []);
 
   // Debounced username checking
   useEffect(() => {
@@ -90,16 +92,9 @@ export default function Signup() {
     return () => clearTimeout(timeoutId);
   }, [emailForm.watch('username')]);
 
-  // Set currency based on country
-  const handleCountryChange = (value: string) => {
-    let currency = "USD";
-    if (value === "India") currency = "INR";
-    if (value === "Nigeria") currency = "NGN";
-
-    emailForm.setValue("currency", currency as "INR" | "NGN" | "USD");
-  };  // Check username availability
+  // Check username availability
   const checkUsernameAvailability = async (username: string) => {
-    if (username.length < 3) {
+    if (!username || username.trim() === '') {
       setUsernameAvailable(null);
       return;
     }
@@ -156,11 +151,9 @@ export default function Signup() {
     try {
       // Save signup data to sessionStorage for the Firebase context to use
       sessionStorage.setItem('signupData', JSON.stringify({
-        username: pendingSignupData.username,
-        gameId: pendingSignupData.gameId,
-        gameMode: pendingSignupData.gameMode,
-        country: pendingSignupData.country,
-        currency: pendingSignupData.currency
+        username: pendingSignupData.username || '',
+        country: detectedGeo?.country || 'United States',
+        currency: detectedGeo?.currency || 'USD'
       }));
 
       // Create the account
@@ -225,15 +218,15 @@ export default function Signup() {
                 name="username"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Username</FormLabel>
+                    <FormLabel>Username (Optional)</FormLabel>
                     <FormControl>
                       <div className="relative">
                         <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                         <Input
-                          placeholder="Choose a username"
+                          placeholder="Choose a username (or leave blank to auto-generate)"
                           className="pl-10 bg-dark-lighter border-gray-700"
                           {...field}
-                          onBlur={() => checkUsernameAvailability(field.value)}
+                          onBlur={() => checkUsernameAvailability(field.value || '')}
                         />
                       </div>
                     </FormControl>
@@ -243,12 +236,12 @@ export default function Signup() {
                         Checking username availability...
                       </p>
                     )}
-                    {usernameAvailable === false && (
+                    {field.value && usernameAvailable === false && (
                       <p className="mt-2 text-sm text-red-500">
                         Username is already taken. Please choose another.
                       </p>
                     )}
-                    {usernameAvailable === true && (
+                    {field.value && usernameAvailable === true && (
                       <p className="mt-2 text-sm text-green-500">
                         Username is available!
                       </p>
@@ -311,74 +304,8 @@ export default function Signup() {
                 )}
               />
 
-              <FormField
-                control={emailForm.control}
-                name="gameId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Game ID (Optional)</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Your in-game ID"
-                        className="bg-dark-lighter border-gray-700"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={emailForm.control}
-                  name="gameMode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Game Mode</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="bg-dark-lighter border-gray-700">
-                            <SelectValue placeholder="Select game" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="PUBG">PUBG Mobile</SelectItem>
-                          <SelectItem value="BGMI">BGMI</SelectItem>
-                          <SelectItem value="FreeFire">Free Fire</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
 
-                <FormField
-                  control={emailForm.control}
-                  name="country"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Country</FormLabel>
-                      <Select onValueChange={(value) => {
-                        field.onChange(value);
-                        handleCountryChange(value);
-                      }} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="bg-dark-lighter border-gray-700">
-                            <SelectValue placeholder="Select country" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="India">🇮🇳 India</SelectItem>
-                          <SelectItem value="Nigeria">🇳🇬 Nigeria</SelectItem>
-                          <SelectItem value="United States">🇺🇸 United States</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
 
               <FormField
                 control={emailForm.control}
@@ -409,7 +336,7 @@ export default function Signup() {
               />              <Button
                 type="submit"
                 className="w-full bg-primary hover:bg-primary/90"
-                disabled={isLoading || authLoading || usernameAvailable === false || usernameChecking}
+                disabled={isLoading || authLoading || (!!emailForm.watch('username') && usernameAvailable === false) || usernameChecking}
               >
                 {(isLoading || authLoading) ? (
                   <>
@@ -421,7 +348,7 @@ export default function Signup() {
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Checking username...
                   </>
-                ) : usernameAvailable === false ? (
+                ) : (!!emailForm.watch('username') && usernameAvailable === false) ? (
                   "Username not available"
                 ) : (
                   "Create Account"

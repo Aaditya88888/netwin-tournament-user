@@ -264,20 +264,33 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
       const signupData = signupDataStr ? JSON.parse(signupDataStr) : {};
 
       // Generate unique username if not provided or if it conflicts
-      let username = signupData.username || 'User';
+      let username = signupData.username;
+
+      if (!username || username.trim() === '') {
+        // Generate from email prefix
+        username = email.split('@')[0];
+      }
+
       const baseUsername = username;
       let counter = 1;
 
-      // Check if username already exists in Firestore
+      // Check if username already exists in Firestore (case-insensitive)
       let usernameExists = true;
       while (usernameExists) {
+        // Check both original and normalized fields for maximum coverage
         const usersQuery = query(
           collection(db, 'users'),
-          where('username', '==', username)
+          where('usernameNormalized', '==', username.toLowerCase())
         );
         const usersSnapshot = await getDocs(usersQuery);
 
-        if (usersSnapshot.empty) {
+        const usersQueryLegacy = query(
+          collection(db, 'users'),
+          where('username', '==', username)
+        );
+        const usersSnapshotLegacy = await getDocs(usersQueryLegacy);
+
+        if (usersSnapshot.empty && usersSnapshotLegacy.empty) {
           usernameExists = false;
         } else {
           username = `${baseUsername}${counter}`;
@@ -306,13 +319,13 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
         email: email,
         displayName: username,
         username: username,
+        usernameNormalized: username.toLowerCase(),
         photoURL: '',
         country,
         currency: currency as 'INR' | 'USD' | 'NGN',
         walletBalance: 0,
         kycStatus: 'NOT_SUBMITTED' as const,
-        gameId: signupData.gameId || '',
-        gameMode: signupData.gameMode || '',
+        gameMode: '',
         role: 'user' as const,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -457,16 +470,44 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
     }
   };
 
-  // Check if username exists in the database
+  // Check if username exists in the database (case-insensitive via API if possible, fallback to internal logic)
   const checkUsernameExists = async (username: string): Promise<boolean> => {
     try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+      // Try calling the backend API first (handles case-insensitivity and permissions)
+      try {
+        const response = await fetch(`${apiUrl}/api/auth/check-username/${encodeURIComponent(username)}`);
+        if (response.ok) {
+          const data = await response.json();
+          return !data.available;
+        }
+      } catch (apiError) {
+        console.warn('API username check failed, falling back to Firestore:', apiError);
+      }
+
+      // Fallback to direct Firestore check (may fail for unauthenticated users)
+      const normalizedUsername = username.toLowerCase();
+
+      // Query against the normalized field first
       const usersQuery = query(
+        collection(db, 'users'),
+        where('usernameNormalized', '==', normalizedUsername)
+      );
+      const usersSnapshot = await getDocs(usersQuery);
+
+      if (!usersSnapshot.empty) return true;
+
+      // Fallback for older records that don't have usernameNormalized
+      const legacyQuery = query(
         collection(db, 'users'),
         where('username', '==', username)
       );
-      const usersSnapshot = await getDocs(usersQuery);
-      return !usersSnapshot.empty;
+      const legacySnapshot = await getDocs(legacyQuery);
+
+      return !legacySnapshot.empty;
     } catch (error) {
+      console.error('Final checkUsernameExists error:', error);
       return false;
     }
   };
@@ -693,8 +734,8 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
         country: profileData.country || 'India', // Ensure country is provided
         currency: profileData.currency || 'INR',
         username: profileData.username || '',
-        gameId: profileData.gameId || '',
-        gameMode: profileData.gameMode || '',
+        usernameNormalized: (profileData.username || '').toLowerCase(),
+        gameMode: '',
         walletBalance: 0,
         kycStatus: 'NOT_SUBMITTED' as const,
         role: 'user' as const,

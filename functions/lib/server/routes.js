@@ -62,6 +62,29 @@ export function registerRoutes(app) {
             res.status(500).json({ message: 'Failed to verify OTP' });
         }
     });
+    app.get("/api/auth/check-username/:username", async (req, res) => {
+        try {
+            const { username } = req.params;
+            if (!username || username.length < 3) {
+                return res.status(400).json({ message: 'Username must be at least 3 characters' });
+            }
+            const normalizedUsername = username.toLowerCase();
+            const usersRef = storage.adminDb.collection('users');
+            const normalizedQuery = await usersRef.where('usernameNormalized', '==', normalizedUsername).limit(1).get();
+            if (!normalizedQuery.empty) {
+                return res.json({ available: false });
+            }
+            const legacyQuery = await usersRef.where('username', '==', username).limit(1).get();
+            if (!legacyQuery.empty) {
+                return res.json({ available: false });
+            }
+            res.json({ available: true });
+        }
+        catch (error) {
+            logger.error(`Error checking username: ${error}`);
+            res.status(500).json({ message: 'Failed to check username availability' });
+        }
+    });
     app.post("/api/admin/notifications", async (req, res) => {
         try {
             const { userId, title, message, type } = req.body;
