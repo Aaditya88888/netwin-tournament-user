@@ -473,11 +473,12 @@ export const FirebaseProvider = ({ children }: FirebaseProviderProps) => {
   // Check if username exists in the database (case-insensitive via API if possible, fallback to internal logic)
   const checkUsernameExists = async (username: string): Promise<boolean> => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const apiUrl = import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : 'http://localhost:5000';
 
       // Try calling the backend API first (handles case-insensitivity and permissions)
       try {
-        const response = await fetch(`${apiUrl}/api/auth/check-username/${encodeURIComponent(username)}`);
+        const url = apiUrl ? `${apiUrl}/api/auth/check-username/${encodeURIComponent(username)}` : `/api/auth/check-username/${encodeURIComponent(username)}`;
+        const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
           return !data.available;

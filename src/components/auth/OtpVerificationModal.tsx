@@ -50,8 +50,8 @@ export const OtpVerificationModal: React.FC<OtpVerificationModalProps> = ({
       setResendLoading(true);
       setError('');
       
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5002';
-      const endpoint = `${apiUrl}/api/auth/send-otp`;
+      const apiUrl = import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : 'http://localhost:5000';
+      const endpoint = apiUrl ? `${apiUrl}/api/auth/send-otp` : '/api/auth/send-otp';
       
       // Call the backend API to send OTP
       const response = await fetch(endpoint, {
@@ -117,8 +117,11 @@ export const OtpVerificationModal: React.FC<OtpVerificationModalProps> = ({
         return;
       }
 
+      const apiUrl = import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : 'http://localhost:5000';
+      const endpoint = apiUrl ? `${apiUrl}/api/auth/verify-otp` : '/api/auth/verify-otp';
+
       // Call the backend API to verify OTP
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5002'}/api/auth/verify-otp`, {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

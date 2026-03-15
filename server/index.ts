@@ -3,6 +3,7 @@ import { Server } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import express from 'express';
 import { app } from './app.js';
 import { logger } from './utils/logger.js';
 
